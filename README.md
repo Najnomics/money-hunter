@@ -13,9 +13,38 @@ It is domain-agnostic: web APIs, EVM, Solana, Move, native binaries, or a mix.
 
 ## The idea in one picture
 
+```mermaid
+flowchart TD
+    A["1. Pick the target<br/>What are we allowed to touch?"] --> B["2. Read the instructions<br/>docs, past audits, public intel"]
+    B --> C["3. Describe expected behaviour<br/>flows, actors, promises"]
+    C --> D["4. Open the code<br/>Where does reality differ from the model?"]
+    D --> E{"Difference found?"}
+    E -- "No" --> F["Record that it matched<br/>and what was checked"]
+    E -- "Yes" --> G["5. Choose the right specialist<br/>math · state · trust · reverse engineering"]
+    G --> H["6. Test it safely<br/>local sandbox + captured output"]
+    H --> I{"Did the test prove it?"}
+    I -- "No" --> J["Keep it as a candidate<br/>or disprove it"]
+    I -- "Yes" --> K["7. Try to disprove it<br/>reachability, guards, conditions"]
+    K --> L["8. Write one plain-English<br/>report per verified bug"]
+    L --> M["Campaign report +<br/>.apex/reports/"]
+    J --> N{"High-value gaps<br/>left?"}
+    F --> N
+    M --> N
+    N -- "Yes" --> O["Start a bounded round<br/>fix only the top gaps"]
+    O --> C
+    N -- "No" --> P["Close with a coverage score<br/>and what was not checked"]
 ```
-Ground -> Research -> Model -> Compare -> Analyze -> Test -> Report
-```
+
+In plain English:
+
+- **A gate is a checklist.** The agent cannot skip a phase just because it is
+  excited about a possible bug.
+- **A candidate is not a finding.** A scanner hit or an untested idea stays a
+  candidate until an executed test proves it.
+- **The coverage loop is bounded.** It fixes a few high-value gaps at a time,
+  not the whole repository forever.
+- **Every target gets its own `.apex/` case file**, so different projects never
+  mix evidence.
 
 Each step writes a file in the target’s `.apex/` folder. A step cannot start
 until the previous checklist is complete. That is what stops the agent from
