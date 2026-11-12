@@ -3,6 +3,10 @@
 Each phase answers one question and leaves one artifact. A tool from phase N
 will refuse to run until every earlier gate is complete.
 
+> The default `core` toolset exposes one grouped tool per phase. Names below
+> such as `parse_scope` are **actions** inside `phase0_ground`, not separate
+> MCP tools. Use `APEX_TOOLSET=full` for the legacy one-tool-per-action names.
+
 ## Phase 0 — Ground Zero
 
 **Question:** What are we allowed to touch, and what are the rules?

@@ -23,8 +23,16 @@ pip install -r requirements.txt
 python main.py --list
 ```
 
-You should see roughly 37 tools grouped by phase. If the list is empty, the
+You should see roughly 10 grouped tools by phase. If the list is empty, the
 install failed.
+
+Toolset switch:
+
+```bash
+export APEX_TOOLSET=core    # default: phase-level grouped tools
+export APEX_TOOLSET=full    # grouped + legacy granular tools
+export APEX_TOOLSET=legacy  # original one-tool-per-action names only
+```
 
 > `apex-core` is the **tool**. The target is the **thing you audit**. They are
 > different folders. Never point `--workspace` at `apex-core` itself.
@@ -104,10 +112,10 @@ Use the same `mcpServers` block.
 Then:
 
 1. Restart the client.
-2. Ask it to list MCP tools. You should see `phase0_parse_scope` through
-   `phase6_generate_report`.
-3. Run `phase0_parse_scope` first. If it returns a phase-gate error, stop and
-   run the missing earlier tool.
+2. Ask it to list MCP tools. You should see `phase0_ground` through
+   `phase6_report` and `phase6_campaign`.
+3. Run `phase0_ground` action `scope` first. If it returns a phase-gate error,
+   stop and run the missing earlier action.
 
 **Two ways to handle targets**
 
@@ -128,15 +136,17 @@ pass `workspace` in each tool call:
 }
 ```
 
-At the start of a campaign the agent calls `phase6_start_campaign` once:
+At the start of a campaign the agent calls `phase6_campaign` action `start`
+once:
 
 ```json
-{"workspace": "/absolute/path/to/target-a", "policy": "standard", "repos": ["."]}
+{"workspace": "/absolute/path/to/target-a", "action": "start", "payload": {"policy": "standard", "repos": ["."]}}
 ```
 
-Then `phase0_parse_scope` and the rest need no target. One server serves every
-target, with separate `.apex/` folders. `phase6_campaign_status` shows the next
-phase and whether strict mode is ready. If the client restarts, bind again.
+Then `phase0_ground` and the rest need no target. One server serves every
+target, with separate `.apex/` folders. `phase6_campaign` action `status` shows
+the next phase and whether strict mode is ready. If the client restarts, bind
+again.
 
 *Per-target default.* Include `--workspace` if you prefer not to pass it on
 every call. If you audit several targets, either create multiple entries with

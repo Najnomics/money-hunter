@@ -1,11 +1,36 @@
 # Tool reference
 
-Every tool is available in two forms:
+## Default grouped tools
 
-- MCP: `phase0_parse_scope`
-- CLI: `python main.py 0 parse_scope --key value`
+The default `core` toolset exposes **10 tools**. Each takes an `action` and a
+`payload` object.
 
-Run `python main.py --list` to print the live list.
+| Tool | Actions |
+|---|---|
+| `phase0_ground` | scope, rules, boundaries, environment |
+| `phase1_research` | docs, audits, intel, cves |
+| `phase2_model` | flows, invariants, vocab, sinks, skeleton, prediction |
+| `phase3_verify` | ast, sweep, prediction_diff, inventory |
+| `phase4_analyze` | dimensional, reverse, state, trust, assumptions, battery, chain |
+| `phase5_experiment` | sandbox, test, record |
+| `phase6_validate` | disprove, citations, classify, coverage, round_start, round_close |
+| `phase6_report` | draft, generate |
+| `phase6_campaign` | start, status, close |
+| `phase6_report_issue` | always available |
+
+CLI example:
+
+```bash
+python main.py 4 analyze --action dimensional --payload '{"divergence_id":"DIV-0001"}'
+```
+
+Legacy one-action-per-tool names are available with
+`APEX_TOOLSET=full` (all tools) or `APEX_TOOLSET=legacy` (old names only).
+
+## Legacy tool details
+
+The tables below document the underlying actions. Use them to fill `payload`;
+use the grouped tool name for MCP/CLI calls.
 
 ## Phase 0 — Ground Zero
 
@@ -101,5 +126,6 @@ workflow is to bind once with `start_campaign`:
 {"workspace": "/absolute/path/to/target", "policy": "standard", "repos": ["."]}
 ```
 
-After that, `phase0_parse_scope` and later tools use the binding. If the client
-restarts, bind again. Per-call `workspace` remains available as an override.
+After that, `phase0_ground` and later grouped tools use the binding. If the
+client restarts, bind again. Per-call `workspace` remains available as an
+override.

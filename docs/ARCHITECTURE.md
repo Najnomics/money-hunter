@@ -140,7 +140,8 @@ Create `.cursor/mcp.json` in the project, or add to the user-level config:
 }
 ```
 
-Cursor then exposes `phase0_parse_scope` … `phase6_generate_report`. Point
+Cursor then exposes the grouped tools `phase0_ground` … `phase6_report`.
+Legacy names such as `phase0_parse_scope` require `APEX_TOOLSET=full`. Point
 `--workspace` at the audit target, not at `apex-core`.
 
 ## Claude Desktop (MCP)

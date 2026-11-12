@@ -15,7 +15,7 @@ from typing import Any, Callable, Type
 from pydantic import BaseModel
 
 TOOL_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-WRITE_MODES = {"section", "append", "report", "none"}
+WRITE_MODES = {"section", "append", "report", "none", "dispatch"}
 
 
 class ToolError(Exception):
@@ -25,6 +25,14 @@ class ToolError(Exception):
         super().__init__(message)
         self.message = message
         self.details = details
+
+
+@dataclass
+class DispatchResult:
+    """Returned by a grouped phase tool to hand off to a concrete child tool."""
+
+    spec: "ToolSpec"
+    result: Any
 
 
 @dataclass

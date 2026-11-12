@@ -40,9 +40,48 @@ missing artifact; never bypass the gate.
 
 ## Tool naming
 
-- MCP: `phase0_parse_scope`, `phase1_check_intel`, `phase4_dimensional_checker`, ...
-- CLI: `python main.py <phase> <tool> --key value`
+The default `core` toolset exposes **10 grouped tools**. Each takes an `action`
+and a `payload` object:
+
+| Tool | Actions |
+|---|---|
+| `phase0_ground` | `scope`, `rules`, `boundaries`, `environment` |
+| `phase1_research` | `docs`, `audits`, `intel`, `cves` |
+| `phase2_model` | `flows`, `invariants`, `vocab`, `sinks`, `skeleton`, `prediction` |
+| `phase3_verify` | `ast`, `sweep`, `prediction_diff`, `inventory` |
+| `phase4_analyze` | `dimensional`, `reverse`, `state`, `trust`, `assumptions`, `battery`, `chain` |
+| `phase5_experiment` | `sandbox`, `test`, `record` |
+| `phase6_validate` | `disprove`, `citations`, `classify`, `coverage`, `round_start`, `round_close` |
+| `phase6_report` | `draft`, `generate` |
+| `phase6_campaign` | `start`, `status`, `close` |
+| `phase6_report_issue` | always available |
+
+Example:
+
+```json
+{"action": "scope", "payload": {"repos": ["."]}}
+```
+
+Names such as `parse_scope` or `ast_divergence_mapper` below are **action
+names**, not MCP tool names. Legacy one-tool-per-action names are available only
+with `APEX_TOOLSET=full`.
+
+- CLI: `python main.py <phase> <group> --action <action> --payload '<json>'`
 - Discovery: `python main.py --list` or MCP `tools/list`.
+
+## Phase 4 routing
+
+Pick the action from the divergence, not from habit:
+
+| Divergence | Action |
+|---|---|
+| arithmetic, decimals, rates, units | `dimensional` |
+| bytecode, binary, minified/obfuscated code | `reverse` |
+| init order, async, callbacks, reentrancy, lifecycle | `state` |
+| auth, input, oracle, privilege boundary | `trust` |
+| silent beliefs / “only X can call this” | `assumptions` |
+| vault, lifecycle, or boundary trigger | `battery` |
+| hypotheses that hand state to each other | `chain` |
 
 Call `python main.py --status` (CLI) before starting a session to see which
 phase artifacts already exist. Resume, never restart cold.
@@ -54,10 +93,10 @@ session:
 {"workspace": "/absolute/path/to/target", "policy": "standard", "repos": ["."]}
 ```
 
-Call `phase6_start_campaign` with those arguments. It binds the target for
-later calls, so `phase0_parse_scope` and the rest do not need `workspace`.
-Call `phase6_campaign_status` to see the next phase and whether strict mode is
-ready. If the client restarts, bind again.
+Call `phase6_campaign` with action `start`. It binds the target for later
+calls, so `phase0_ground` and the rest do not need `workspace`. Call
+`phase6_campaign` with action `status` to see the next phase and whether strict
+mode is ready. If the client restarts, bind again.
 
 If you prefer not to bind, include `"workspace"` in every call instead. One
 global server can serve many targets; each target keeps its own `.apex/`.
@@ -170,7 +209,7 @@ Also use:
 
 ## Report pipeline problems immediately
 
-`report_issue` is always available, even when a phase gate is blocking you.
+`phase6_report_issue` is always available, even when a phase gate is blocking you.
 Use it instead of silently improvising:
 
 - `kind=tool_friction` — the tool works but is confusing or noisy

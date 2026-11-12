@@ -32,7 +32,7 @@ from registry import PluginRegistry  # noqa: E402
 from runtime import SessionState, ToolContext, ToolError, ToolSpec  # noqa: E402
 from state_manager import ArtifactError, GateError, StateError, StateManager  # noqa: E402
 
-VERSION = "1.0.4"
+VERSION = "1.1.0"
 
 
 # --------------------------------------------------------------------- input
@@ -188,6 +188,41 @@ def build_raw_args(flags: dict[str, Any], spec: ToolSpec) -> dict[str, Any]:
     return {key: _coerce(value, fields[key].annotation) for key, value in flags.items()}
 
 
+def _artifact_for(spec: ToolSpec, state: StateManager) -> str:
+    if spec.write_mode == "none":
+        return ".apex/config.json"
+    if spec.always_available:
+        return state.meta_relpath(spec.phase)
+    return state.artifact_relpath(spec.phase)
+
+
+def _persist_result(spec: ToolSpec, data: dict[str, Any], state: StateManager) -> str:
+    """Persist a concrete tool result using that tool's own write mode."""
+    if spec.write_mode == "section":
+        state.write_section(spec.phase, spec.section, data, spec.name)
+    elif spec.write_mode == "append":
+        items = data.get("items") if isinstance(data, dict) else None
+        if items is None and isinstance(data, dict):
+            items = data.get("hypotheses")
+        if not isinstance(items, list):
+            raise ToolError(f"{spec.name}: append output must contain an `items` list")
+        state.append_items(spec.phase, spec.section, items, spec.name)
+    elif spec.write_mode == "report":
+        markdown = data.pop("markdown", "")
+        if not markdown:
+            raise ToolError(f"{spec.name}: report output is empty")
+        state.write_report(markdown)
+        data["report_path"] = state.artifact_relpath(6)
+        state.write_section(6, "report", data, spec.name)
+    elif spec.write_mode == "none":
+        pass
+    else:  # pragma: no cover
+        raise ToolError(f"{spec.name}: invalid write mode {spec.write_mode}")
+    if spec.phase == 0 and isinstance(data.get("target_profile"), str):
+        state.update_config(target_profile=data["target_profile"])
+    return _artifact_for(spec, state)
+
+
 # ----------------------------------------------------------------- execution
 def execute_tool(
     spec: ToolSpec,
@@ -235,48 +270,43 @@ def execute_tool(
     except Exception as exc:
         raise ToolError(f"{spec.name} failed: {exc}") from exc
 
+    if spec.write_mode == "dispatch":
+        from runtime import DispatchResult
+
+        if not isinstance(result, DispatchResult):
+            raise ToolError(f"{spec.name}: grouped tool must return DispatchResult")
+        child = result.spec
+        try:
+            child_data = child.output_model.model_validate(result.result).model_dump(mode="json")
+        except Exception as exc:
+            raise ToolError(f"{spec.name}/{child.name} produced invalid output: {exc}") from exc
+        artifact = _persist_result(child, child_data, call_state)
+        return {
+            "ok": True,
+            "phase": child.phase,
+            "tool": child.name,
+            "group": spec.name,
+            "action": getattr(payload_in, "action", None),
+            "section": child.section,
+            "workspace": str(call_workspace),
+            "artifact": artifact,
+            "gate": call_state.gate_status(child.phase),
+            "data": child_data,
+        }
+
     try:
         data = spec.output_model.model_validate(result).model_dump(mode="json")
     except Exception as exc:
         raise ToolError(f"{spec.name} produced invalid output: {exc}") from exc
 
-    if spec.write_mode == "section":
-        call_state.write_section(spec.phase, spec.section, data, spec.name)
-    elif spec.write_mode == "append":
-        items = data.get("items") if isinstance(data, dict) else None
-        if items is None and isinstance(data, dict):
-            items = data.get("hypotheses")
-        if not isinstance(items, list):
-            raise ToolError(f"{spec.name}: append output must contain an `items` list")
-        call_state.append_items(spec.phase, spec.section, items, spec.name)
-    elif spec.write_mode == "report":
-        markdown = data.pop("markdown", "")
-        if not markdown:
-            raise ToolError(f"{spec.name}: report output is empty")
-        call_state.write_report(markdown)
-        data["report_path"] = call_state.artifact_relpath(6)
-        call_state.write_section(6, "report", data, spec.name)
-    elif spec.write_mode == "none":
-        pass  # meta tool; it updates config/session only
-    else:  # pragma: no cover - validated by ToolSpec
-        raise ToolError(f"{spec.name}: invalid write mode {spec.write_mode}")
-
-    if spec.phase == 0 and isinstance(data.get("target_profile"), str):
-        call_state.update_config(target_profile=data["target_profile"])
-
+    artifact = _persist_result(spec, data, call_state)
     return {
         "ok": True,
         "phase": spec.phase,
         "tool": spec.name,
         "section": spec.section,
         "workspace": str(call_workspace),
-        "artifact": (
-            ".apex/config.json"
-            if spec.write_mode == "none"
-            else call_state.meta_relpath(spec.phase)
-            if spec.always_available
-            else call_state.artifact_relpath(spec.phase)
-        ),
+        "artifact": artifact,
         "gate": call_state.gate_status(spec.phase),
         "data": data,
     }

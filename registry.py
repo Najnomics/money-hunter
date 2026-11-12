@@ -67,7 +67,34 @@ class PluginRegistry:
         self._discover_core()
         for directory in self._extra_paths:
             self._discover_directory(directory)
+        self._apply_toolset()
         return self
+
+    def _apply_toolset(self) -> None:
+        """Hide granular tools by default so the agent sees phase-level choices.
+
+        APEX_TOOLSET=core    grouped phase tools + report_issue (default)
+        APEX_TOOLSET=full    everything
+        APEX_TOOLSET=legacy  only the original granular tools
+        """
+        toolset = os.environ.get("APEX_TOOLSET", "core").lower()
+        if toolset not in {"core", "full", "legacy"}:
+            toolset = "core"
+        if toolset == "full":
+            return
+        kept: dict[tuple[int, str], ToolSpec] = {}
+        for key, spec in self._tools.items():
+            grouped = "grouped" in spec.tags
+            is_plugin = not spec.plugin.startswith("core:")
+            is_meta = spec.name == "report_issue"
+            if toolset == "legacy":
+                keep = not grouped
+            else:  # core
+                keep = grouped or is_plugin or is_meta
+            if keep:
+                kept[key] = spec
+        self._tools = kept
+        self._qualified = {spec.qualified_name: spec for spec in kept.values()}
 
     def _discover_core(self) -> None:
         try:
