@@ -33,6 +33,32 @@ python main.py --list
 `tree-sitter-language-pack` is optional. Without it, Phase 3 falls back to
 pattern extraction and records that honestly.
 
+### One-click setup
+
+```bash
+# Cursor, one project, with the shared intel corpus
+./scripts/setup.sh --intel --client cursor --target /absolute/path/to/target
+
+# Claude Desktop, global one-time server
+./scripts/setup.sh --intel --client claude
+```
+
+The script creates the venv, installs dependencies, syncs the intel corpus,
+writes the MCP config, and sets the policy. `--force` replaces an existing
+`apex-core` entry.
+
+### Intel corpus: linked, not vendored
+
+`bugbounty-intel` is deliberately **not** committed here. It changes too often.
+Clone/update it into a shared cache:
+
+```bash
+./scripts/sync-intel.sh            # ~/.apex/intel/bugbounty-intel
+```
+
+`check_intel` automatically finds that path and reports the corpus git revision
+and commit date. Override with `APEX_INTEL_CORPUS` or `APEX_INTEL_REPO`.
+
 ## Quick start
 
 Run against a target folder:
@@ -110,26 +136,28 @@ You can change it later. The policy is stored in `.apex/config.json`.
 
 ## Connect it to Cursor
 
-Create `.cursor/mcp.json` (or add to your user config):
+**One-time global setup (recommended):** configure the server once, then pass
+the target workspace in each tool call. One server can serve every project.
 
 ```json
 {
   "mcpServers": {
     "apex-core": {
-      "command": "python3",
-      "args": [
-        "/ABS/PATH/apex-core/main.py",
-        "--mcp",
-        "--workspace",
-        "/ABS/PATH/TARGET"
-      ],
+      "command": "/ABS/PATH/apex-core/bin/apex",
+      "args": ["--mcp"],
       "env": {
-        "APEX_INTEL_CORPUS": "/ABS/PATH/bugbounty-intel"
+        "APEX_INTEL_CORPUS": "/home/you/.apex/intel/bugbounty-intel"
       }
     }
   }
 }
 ```
+
+The agent then calls tools with `"workspace": "/ABS/PATH/TARGET"` alongside
+the normal arguments. Each target gets its own `.apex/` case file.
+
+If you prefer a fixed default, add `--workspace /ABS/PATH/TARGET` to the args
+and omit `workspace` from calls.
 
 ## Connect it to Claude Desktop
 
@@ -143,20 +171,18 @@ Edit `claude_desktop_config.json`:
 {
   "mcpServers": {
     "apex-core": {
-      "command": "python3",
-      "args": [
-        "/ABS/PATH/apex-core/main.py",
-        "--mcp",
-        "--workspace",
-        "/ABS/PATH/TARGET"
-      ]
+      "command": "/ABS/PATH/apex-core/bin/apex",
+      "args": ["--mcp"],
+      "env": {
+        "APEX_INTEL_CORPUS": "/home/you/.apex/intel/bugbounty-intel"
+      }
     }
   }
 }
 ```
 
-If you use a virtual environment, point `command` at
-`.../apex-core/.venv/bin/python`.
+This is also one-time. The agent supplies the target workspace per call.
+`bin/apex` already prefers the project virtualenv, so no Python path is needed.
 
 ## Use it from Copilot, Kilocode, or any CLI agent
 
@@ -193,6 +219,7 @@ pipeline feedback mechanism.
 - [The coverage loop](docs/COVERAGE_LOOP.md) — how second passes work
 - [Tool reference](docs/TOOLS.md) — every tool in one table
 - [Extending](docs/EXTENDING.md) — add an adapter or a tool
+- [Publishing](docs/PUBLISHING.md) — push the repo and keep the intel corpus linked
 - [Technical architecture](docs/ARCHITECTURE.md) — the original deep dive
 
 ## Safety

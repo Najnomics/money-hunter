@@ -47,6 +47,11 @@ missing artifact; never bypass the gate.
 Call `python main.py --status` (CLI) before starting a session to see which
 phase artifacts already exist. Resume, never restart cold.
 
+If the MCP server was configured without `--workspace`, include
+`"workspace": "/absolute/path/to/target"` in **every** tool call. If it has a
+default workspace, omit the field. One global server can serve many targets;
+each target keeps its own `.apex/`.
+
 ## Phase rules
 
 ### Phase 0 — Ground Zero

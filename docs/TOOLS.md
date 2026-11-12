@@ -90,3 +90,10 @@ Every tool requires a valid `divergence_id`.
 --json '{"divergence_id":"DIV-0001"}'
 --args-file args.json
 ```
+
+Every MCP tool also accepts an optional `workspace` field. Use it when one
+global MCP server serves multiple targets:
+
+```json
+{"workspace": "/absolute/path/to/target", "repos": ["."]}
+```

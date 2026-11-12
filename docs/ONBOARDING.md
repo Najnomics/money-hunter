@@ -44,6 +44,28 @@ python "$CORE" --policy standard --workspace "$TARGET"
 `--workspace` must be an absolute path in MCP configs. Relative paths are
 resolved from wherever the server happens to start, which is confusing.
 
+## One-click setup (optional)
+
+The setup script creates the venv, installs dependencies, optionally syncs the
+intel corpus, writes the MCP config, and sets the campaign policy.
+
+```bash
+# Cursor, one project, with the intel corpus
+./scripts/setup.sh --intel --client cursor --target /absolute/path/to/target
+
+# Claude Desktop, global one-time server (target passed per tool call)
+./scripts/setup.sh --intel --client claude
+
+# Both clients, no install (dependencies already present)
+./scripts/setup.sh --client both --target /absolute/path/to/target --skip-install
+
+# Just show the config without writing anything
+./scripts/setup.sh
+```
+
+It backs up an unparseable existing config and does not overwrite an existing
+`apex-core` entry unless you pass `--force`.
+
 ## Step 3 — Choose how the agent connects
 
 ### Option A: MCP (Cursor or Claude Desktop)
@@ -87,9 +109,37 @@ Then:
 3. Run `phase0_parse_scope` first. If it returns a phase-gate error, stop and
    run the missing earlier tool.
 
-**One target per server entry.** If you audit three targets, create three
-entries (`apex-core-target-a`, `apex-core-target-b`, …) with different
-`--workspace` values. The tools and the case files stay separate.
+**Two ways to handle targets**
+
+*One-time global server (recommended).* Omit `--workspace` from the config and
+pass `workspace` in each tool call:
+
+```json
+{
+  "mcpServers": {
+    "apex-core": {
+      "command": "/absolute/path/to/apex-core/bin/apex",
+      "args": ["--mcp"],
+      "env": {
+        "APEX_INTEL_CORPUS": "/home/you/.apex/intel/bugbounty-intel"
+      }
+    }
+  }
+}
+```
+
+Then the agent calls:
+
+```json
+{"workspace": "/absolute/path/to/target-a", "repos": ["."]}
+```
+
+One server, every target, separate `.apex/` folders. This is the setup that
+makes MCP a true one-time installation.
+
+*Per-target default.* Include `--workspace` if you prefer not to pass it on
+every call. If you audit several targets, either create multiple entries with
+different names or switch to the global mode above.
 
 ### Option B: CLI (Copilot, Kilocode, custom agent)
 
@@ -172,6 +222,36 @@ Kinds:
 Issues are stored in `.apex/06_report_meta.json` under `issues` and appear in
 the final report under **Agent feedback & missing tools**.
 
+## Intel corpus: linked, not vendored
+
+The `bugbounty-intel` repository is **not** committed into Apex Core. It is a
+53 MB, constantly changing corpus. The core expects it at:
+
+```text
+~/.apex/intel/bugbounty-intel
+```
+
+or at the path in `APEX_INTEL_CORPUS`.
+
+Sync it with:
+
+```bash
+./scripts/sync-intel.sh
+```
+
+That script clones with `--depth 1` on first use and runs `git pull --ff-only`
+afterward. Override the remote with `APEX_INTEL_REPO` if the repository moves.
+
+`check_intel` reports the corpus git revision and commit date in its notes, so
+you always know how fresh the intel was. The MCP config can also pass the path:
+
+```json
+"env": { "APEX_INTEL_CORPUS": "/home/you/.apex/intel/bugbounty-intel" }
+```
+
+Update cadence: run `sync-intel.sh` before a new campaign, or weekly. Do not
+copy the corpus into the `apex-core` repository.
+
 ## Step 7 — Update the core
 
 ```bash
@@ -197,6 +277,8 @@ core does not delete a campaign. Re-run `--status` after an update.
 | Static tool says `unavailable` | Binary not on PATH | Install it, or record a `missing_tool` issue |
 | Experiments do nothing | `invariant_tester` is dry by default | Pass `--execute true` and a `--command` |
 | Agent edited `.apex` by hand | Gate confusion | Regenerate with tools; hand edits defeat the audit trail |
+| `check_intel` says the corpus is not a git checkout | You copied the folder instead of cloning it | Delete it and run `scripts/sync-intel.sh` |
+| MCP tool calls land in the wrong project | Global server without `workspace` | Pass `"workspace": "/abs/target"` in every call |
 
 ## Team rules
 
