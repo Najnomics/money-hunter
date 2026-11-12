@@ -1,7 +1,7 @@
 # Apex Core
 
 **A disciplined audit campaign manager for AI agents.**  
-**Version 1.0.1**
+**Version 1.0.2**
 
 Apex Core gives an agent a clear process for security work: understand the
 target, write down what should happen, compare it with the code, test the
@@ -107,7 +107,6 @@ This is also one-time. The agent supplies the target workspace per call.
 `bin/apex` already prefers the project virtualenv, so no Python path is needed.
 
 ## Use it from Copilot, Kilocode, or any CLI agent
-
 No MCP needed. Give the agent `SYSTEM_PROMPT.md` and let it call:
 
 ```bash

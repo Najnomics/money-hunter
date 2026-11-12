@@ -47,6 +47,8 @@ def sandbox_forge(ctx: ToolContext, inp: SandboxInput) -> SandboxOutput:
     for relative, content in templates.items():
         target = destination / relative
         write_text_atomic(target, content)
+        if target.suffix == ".sh":
+            target.chmod(0o755)
         written.append(rel_to(target, ctx.workspace))
 
     instructions = adapter.sandbox_instructions()

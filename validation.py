@@ -12,6 +12,8 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+from fsutil import walk_files
+
 # Only source/document extensions are treated as citations.  This prevents
 # URLs such as ``api.example.com:443`` from being mistaken for file paths.
 _SOURCE_EXTS = (
@@ -49,7 +51,19 @@ def validate_cite(workspace: Path, cite: str) -> dict[str, Any]:
     except (ValueError, OSError):
         return {"cite": cite, "valid": False, "reason": "citation escapes the target workspace"}
     if not resolved.is_file():
-        return {"cite": cite, "valid": False, "reason": "cited file does not exist"}
+        # Free-text notes often name only the basename (e.g. ``withdraw.rs:297``).
+        # Resolve it when the basename is unique inside the workspace.
+        matches = [p for p in walk_files([workspace], max_files=20000) if p.name == candidate.name]
+        suffix_matches = [p for p in matches if str(p.resolve()).endswith(file_name)]
+        if len(suffix_matches) == 1:
+            resolved = suffix_matches[0].resolve()
+        elif len(matches) == 1:
+            resolved = matches[0].resolve()
+        else:
+            reason = "cited file does not exist"
+            if len(matches) > 1:
+                reason = f"ambiguous basename {candidate.name!r}; use a workspace-relative path"
+            return {"cite": cite, "valid": False, "reason": reason}
     try:
         line_count = len(resolved.read_text(encoding="utf-8", errors="replace").splitlines())
     except OSError:
@@ -68,31 +82,46 @@ def validate_cite(workspace: Path, cite: str) -> dict[str, Any]:
     }
 
 
-def extract_cites(value: Any, skip_keys: Iterable[str] = ("markdown", "skeleton", "check_command")) -> list[str]:
-    """Recursively pull every ``path:line`` citation out of a JSON-like object."""
+def extract_cites(
+    value: Any,
+    skip_keys: Iterable[str] = ("markdown", "skeleton", "check_command"),
+    focus_keys: Iterable[str] | None = None,
+) -> list[str]:
+    """Recursively pull every ``path:line`` citation out of a JSON-like object.
+
+    When ``focus_keys`` is supplied, only strings under those field names are
+    scanned.  This keeps free-text observations from being treated as evidence
+    citations.
+    """
     skip = set(skip_keys)
+    focus = set(focus_keys) if focus_keys is not None else None
     found: list[str] = []
 
-    def walk(item: Any) -> None:
+    def walk(item: Any, active: bool) -> None:
         if isinstance(item, dict):
             for key, child in item.items():
                 if key in skip:
                     continue
-                walk(child)
+                child_active = active or (focus is None) or (key in focus)
+                walk(child, child_active)
         elif isinstance(item, list):
             for child in item:
-                walk(child)
-        elif isinstance(item, str):
+                walk(child, active)
+        elif isinstance(item, str) and (focus is None or active):
             for match in CITE_RE.finditer(item):
                 found.append(match.group(0))
 
-    walk(value)
+    walk(value, False)
     return list(dict.fromkeys(found))
 
 
-def validate_cites(workspace: Path, value: Any) -> dict[str, Any]:
+def validate_cites(
+    workspace: Path,
+    value: Any,
+    focus_keys: Iterable[str] | None = None,
+) -> dict[str, Any]:
     """Validate all citations in a payload and return a compact report."""
-    cites = extract_cites(value)
+    cites = extract_cites(value, focus_keys=focus_keys)
     results = [validate_cite(workspace, cite) for cite in cites]
     invalid = [row for row in results if not row["valid"]]
     return {
@@ -125,7 +154,10 @@ def fact_ok(fact: str, known_vars: set[str] | None = None) -> tuple[bool, str]:
     """Check the ``state_variable:condition`` format used by chains."""
     match = FACT_RE.match(str(fact).strip())
     if not match:
-        return False, "fact must look like state_variable:condition"
+        return False, (
+            "fact must look like state_variable:condition "
+            "(lowercase snake_case condition, e.g. BALANCES:payout_sent)"
+        )
     variable = match.group(1)
     if known_vars is not None and known_vars and variable not in known_vars:
         return False, f"state variable {variable!r} is not registered"

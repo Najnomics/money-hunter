@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 from fsutil import is_binary, rel_to, sha256_file, walk_files
-from runtime import ToolContext, ToolSpec, tool
+from runtime import ToolContext, ToolError, ToolSpec, tool
 from schemas.common import Confidence
 from schemas.phase4 import (
     AssumptionBatch,

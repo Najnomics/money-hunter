@@ -17,11 +17,18 @@ Phase layout
 """
 from __future__ import annotations
 
+import contextlib
 import json
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows fallback
+    fcntl = None
 
 from fsutil import now_iso, rel_to, write_text_atomic
 from schemas.common import TargetProfile
@@ -81,6 +88,32 @@ class StateManager:
         self.workspace = Path(workspace).expanduser().resolve()
         self.state_dir_name = state_dir
         self.apex_dir = (self.workspace / state_dir).resolve()
+        self._thread_lock = threading.RLock()
+        self._lock_depth = 0
+        self._lock_handle = None
+
+    @contextlib.contextmanager
+    def _state_lock(self):
+        """One writer at a time per state directory.
+
+        This prevents two concurrent MCP tool calls from reading the same
+        envelope and writing over each other.  The reentrant depth counter lets
+        an outer method (update_config) call an inner save without deadlocking.
+        """
+        self.ensure()
+        with self._thread_lock:
+            if self._lock_depth == 0 and fcntl is not None:
+                self._lock_handle = open(self.apex_dir / ".state.lock", "a+")
+                fcntl.flock(self._lock_handle.fileno(), fcntl.LOCK_EX)
+            self._lock_depth += 1
+            try:
+                yield
+            finally:
+                self._lock_depth -= 1
+                if self._lock_depth == 0 and self._lock_handle is not None:
+                    fcntl.flock(self._lock_handle.fileno(), fcntl.LOCK_UN)
+                    self._lock_handle.close()
+                    self._lock_handle = None
 
     # ------------------------------------------------------------------ setup
     def ensure(self) -> Path:
@@ -121,6 +154,10 @@ class StateManager:
         return data if isinstance(data, dict) else {}
 
     def update_config(self, **values: Any) -> dict[str, Any]:
+        with self._state_lock():
+            return self._update_config_unlocked(**values)
+
+    def _update_config_unlocked(self, **values: Any) -> dict[str, Any]:
         self.ensure()
         cfg = self.read_config()
         cfg.update({k: v for k, v in values.items() if v is not None})
@@ -261,6 +298,16 @@ class StateManager:
         payload: Any,
         tool: str = "",
     ) -> Path:
+        with self._state_lock():
+            return self._write_section_unlocked(phase, section, payload, tool)
+
+    def _write_section_unlocked(
+        self,
+        phase: int,
+        section: str,
+        payload: Any,
+        tool: str = "",
+    ) -> Path:
         env = self._load_envelope(phase, create=True)
         assert env is not None
         previous = env["sections"].get(section)
@@ -274,6 +321,16 @@ class StateManager:
         return path
 
     def append_items(
+        self,
+        phase: int,
+        section: str,
+        items: Iterable[dict[str, Any]],
+        tool: str = "",
+    ) -> Path:
+        with self._state_lock():
+            return self._append_items_unlocked(phase, section, items, tool)
+
+    def _append_items_unlocked(
         self,
         phase: int,
         section: str,
@@ -558,11 +615,12 @@ class StateManager:
         return highest + 1
 
     def write_round(self, record: dict[str, Any]) -> Path:
-        self.rounds_dir.mkdir(parents=True, exist_ok=True)
-        number = int(record["round"])
-        path = self.rounds_dir / f"round-{number}.json"
-        write_text_atomic(path, json.dumps(record, indent=2, sort_keys=True))
-        return path
+        with self._state_lock():
+            self.rounds_dir.mkdir(parents=True, exist_ok=True)
+            number = int(record["round"])
+            path = self.rounds_dir / f"round-{number}.json"
+            write_text_atomic(path, json.dumps(record, indent=2, sort_keys=True))
+            return path
 
     # ---------------------------------------------------------------- status
     def snapshot(self) -> dict[str, Any]:

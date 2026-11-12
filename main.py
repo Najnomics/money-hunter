@@ -32,7 +32,7 @@ from registry import PluginRegistry  # noqa: E402
 from runtime import SessionState, ToolContext, ToolError, ToolSpec  # noqa: E402
 from state_manager import ArtifactError, GateError, StateError, StateManager  # noqa: E402
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 
 # --------------------------------------------------------------------- input

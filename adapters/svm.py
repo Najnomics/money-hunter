@@ -53,8 +53,28 @@ def sandbox_files(service: str) -> dict[str, str]:
             "    assert!(true);\n"
             "}\n"
         ),
+        "scripts/preflight.sh": (
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            "echo \"anchor: $(anchor --version 2>&1 || true)\"\n"
+            "echo \"cargo: $(cargo --version 2>&1 || true)\"\n"
+            "echo 'Checking cargo metadata (private git deps fail here, not in anchor build)...'\n"
+            "cargo metadata --format-version 1 >/dev/null\n"
+            "echo 'Metadata OK. If anchor build still hangs, run cargo build-sbf or cargo test-sbf.'\n"
+        ),
         "README.md": (
             f"# {service} — Anchor sandbox\n\n"
+            "Run the preflight first:\n\n"
+            "```bash\nbash scripts/preflight.sh\n```\n\n"
+            "It prints the installed Anchor version and runs `cargo metadata`, which\n"
+            "reports unreachable/private git dependencies immediately. `anchor build`\n"
+            "can hang for many minutes without that diagnosis.\n\n"
+            "Version notes:\n"
+            "- Check `anchor --version` against `Anchor.toml`; mismatched CLI/version\n"
+            "  can reject flags such as `--ignore-keys`.\n"
+            "- If a flag is rejected, use the Anchor CLI version the project expects.\n"
+            "- If `anchor build` produces no output, run `cargo build-sbf` or\n"
+            "  `cargo test-sbf` to see the real compiler error.\n\n"
             "```bash\nanchor build\nanchor test --skip-local-validator  # local validator only\n```\n\n"
             "Never submit transactions to mainnet or a public devnet from this harness.\n"
         ),
@@ -63,6 +83,7 @@ def sandbox_files(service: str) -> dict[str, str]:
 
 ADAPTER.sandbox_files = sandbox_files  # type: ignore[method-assign]
 ADAPTER.sandbox_instructions = (  # type: ignore[method-assign]
-    lambda: "Anchor local-validator sandbox. Build with `anchor build`; run tests against a "
-    "local validator and capture transaction logs."
+    lambda: "Anchor local-validator sandbox. Run `scripts/preflight.sh` first so cargo "
+    "metadata/network failures surface immediately, check `anchor --version` against "
+    "Anchor.toml, then build and run tests against a local validator."
 )

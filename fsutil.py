@@ -7,9 +7,11 @@ always invoked with an explicit timeout.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -149,10 +151,28 @@ def rel_to(path: Path, root: Path) -> str:
 
 
 def write_text_atomic(path: Path, text: str) -> None:
+    """Write a complete file atomically.
+
+    A unique temp name prevents two concurrent tool calls from writing into the
+    same temporary file.  JSON files are re-parsed before the rename, so a
+    malformed section can never replace a good artifact.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+    if path.suffix == ".json":
+        json.loads(text)  # fail before touching the old file
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    try:
+        with tmp.open("w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
 
 
 @dataclass

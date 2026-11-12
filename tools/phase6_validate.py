@@ -124,7 +124,16 @@ def verify_citations(ctx: ToolContext, inp: CitationCheckInput) -> CitationCheck
             if name == "markdown" and not inp.include_markdown:
                 continue
             payloads.append(value)
-    report = validate_cites(ctx.workspace, payloads)
+    # Only structured evidence fields are claims. Free-text observations such
+    # as "withdraw.rs:297" are notes, not citations, and must not block a report.
+    report = validate_cites(
+        ctx.workspace,
+        payloads,
+        focus_keys={
+            "evidence", "cites", "cite", "satisfies_cite", "file", "where",
+            "poc", "artifact", "output_path", "stdout_path", "stderr_path",
+        },
+    )
     details = [
         CitationIssue(cite=row["cite"], reason=row["reason"])
         for row in report.get("details", [])
