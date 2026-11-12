@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Stable launcher for Apex Core.
+#
+# Examples:
+#   ./bin/apex --list
+#   ./bin/apex 0 parse_scope --workspace /target --repos .
+#   ./bin/apex --mcp
+#
+# The launcher prefers the project virtualenv, then falls back to python3.
+set -euo pipefail
+
+CORE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ -x "$CORE/.venv/bin/python" ]; then
+  PY="$CORE/.venv/bin/python"
+elif [ -x "$CORE/.venv/Scripts/python.exe" ]; then
+  PY="$CORE/.venv/Scripts/python.exe"
+else
+  PY="$(command -v python3 || command -v python)"
+fi
+
+exec "$PY" "$CORE/main.py" "$@"
