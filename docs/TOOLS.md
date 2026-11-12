@@ -78,6 +78,8 @@ Every tool requires a valid `divergence_id`.
 | `start_round` | `gaps[]`, `max_gaps` | `round` + `.apex/rounds/` |
 | `close_round` | `round`, `outcome`, counts, `remaining_gaps` | `round` + `.apex/rounds/` |
 | `close_session` | `status`, `resume_state`, `backlog[]` | `session` + death-note |
+| `start_campaign` | `workspace`, `policy`, `repos`, `endpoints` | `config.json` (binds target; any phase) |
+| `campaign_status` | optional `workspace` | gate progress + strict readiness (any phase) |
 | `report_issue` | `kind`, `title`, `description`, `tool`, `severity`, `requested_change` | `issues` (available at any phase) |
 | `generate_report` | mirror fields, `include_theoretical` | `06_final_report.md` |
 
@@ -91,9 +93,12 @@ Every tool requires a valid `divergence_id`.
 --args-file args.json
 ```
 
-Every MCP tool also accepts an optional `workspace` field. Use it when one
-global MCP server serves multiple targets:
+Every MCP tool also accepts an optional `workspace` field, but the normal
+workflow is to bind once with `start_campaign`:
 
 ```json
-{"workspace": "/absolute/path/to/target", "repos": ["."]}
+{"workspace": "/absolute/path/to/target", "policy": "standard", "repos": ["."]}
 ```
+
+After that, `phase0_parse_scope` and later tools use the binding. If the client
+restarts, bind again. Per-call `workspace` remains available as an override.

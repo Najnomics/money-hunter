@@ -1,7 +1,7 @@
 # Apex Core
 
 **A disciplined audit campaign manager for AI agents.**  
-**Version 1.0.0**
+**Version 1.0.1**
 
 Apex Core gives an agent a clear process for security work: understand the
 target, write down what should happen, compare it with the code, test the
@@ -68,11 +68,18 @@ the target workspace in each tool call. One server can serve every project.
 }
 ```
 
-The agent then calls tools with `"workspace": "/ABS/PATH/TARGET"` alongside
-the normal arguments. Each target gets its own `.apex/` case file.
+At the start of a campaign the agent calls `phase6_start_campaign` once with
+the target and policy, then calls `phase0_parse_scope` without repeating the
+target:
 
-If you prefer a fixed default, add `--workspace /ABS/PATH/TARGET` to the args
-and omit `workspace` from calls.
+```json
+{"workspace": "/ABS/PATH/TARGET", "policy": "standard", "repos": ["."]}
+```
+
+Each target gets its own `.apex/` case file. `phase6_campaign_status` reports
+the next phase and whether strict mode is ready. If the client restarts, bind
+again. If you prefer a fixed default instead, add `--workspace` to the server
+args.
 
 ## Connect it to Claude Desktop
 

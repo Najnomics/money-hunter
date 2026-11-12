@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import Field
 
@@ -212,3 +212,30 @@ class IssueEntry(IssueInput):
 class IssueBatch(ApexModel):
     items: list[IssueEntry] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+
+
+class CampaignStartInput(ApexModel):
+    policy: str = Field("standard", description="light | standard | strict")
+    profile: Optional[str] = Field(None, description="Optional TargetProfile override.")
+    repos: list[str] = Field(default_factory=lambda: ["."])
+    endpoints: list[str] = Field(default_factory=list)
+    notes: Optional[str] = None
+
+
+class CampaignStartOutput(ApexModel):
+    workspace: str
+    policy: str
+    next_tool: str
+    next_args: dict[str, Any] = Field(default_factory=dict)
+    message: str
+
+
+class CampaignStatusOutput(ApexModel):
+    workspace: str
+    policy: str
+    next_phase: Optional[int] = None
+    phases: list[dict[str, Any]] = Field(default_factory=list)
+    counts: dict[str, int] = Field(default_factory=dict)
+    strict_ready: bool = False
+    strict_missing: list[str] = Field(default_factory=list)
+    message: str = ""

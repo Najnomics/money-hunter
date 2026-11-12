@@ -9,6 +9,9 @@ from __future__ import annotations
 from fsutil import now_iso, rel_to, sha1_text, write_text_atomic
 from runtime import ToolContext, ToolSpec, ToolError, tool
 from schemas.phase6 import (
+    CampaignStartInput,
+    CampaignStartOutput,
+    CampaignStatusOutput,
     CheckResult,
     CitationCheckInput,
     CitationCheckOutput,
@@ -438,6 +441,84 @@ def _table(headers: list[str], rows: list[list]) -> str:
 
 
 @tool(
+    name="start_campaign",
+    phase=6,
+    section="campaign",
+    summary="Bind a target workspace and policy once, then call phase0 without repeating workspace.",
+    input_model=CampaignStartInput,
+    output_model=CampaignStartOutput,
+    write_mode="none",
+    always_available=True,
+    tags=("meta", "campaign"),
+)
+def start_campaign(ctx: ToolContext, inp: CampaignStartInput) -> CampaignStartOutput:
+    allowed = {"light", "standard", "strict"}
+    if inp.policy not in allowed:
+        raise ToolError(f"policy must be one of {sorted(allowed)}")
+    target = str(getattr(inp, "workspace", None) or ctx.workspace)
+    if ctx.session is not None:
+        from pathlib import Path
+
+        ctx.session.workspace = Path(target).expanduser().resolve()
+        ctx.session.policy_hint = inp.policy
+    values: dict[str, object] = {"gate_policy": inp.policy}
+    if inp.profile:
+        values["target_profile"] = inp.profile
+    ctx.state.update_config(**values)
+
+    next_args: dict[str, object] = {"repos": inp.repos or ["."]}
+    if inp.endpoints:
+        next_args["endpoints"] = inp.endpoints
+    if inp.profile:
+        next_args["profile"] = inp.profile
+    message = (
+        f"Campaign bound to {target} with policy {inp.policy}. "
+        "Next: phase0_parse_scope. Ask the user before switching to strict."
+    )
+    return CampaignStartOutput(
+        workspace=target,
+        policy=inp.policy,
+        next_tool="phase0_parse_scope",
+        next_args=next_args,
+        message=message,
+    )
+
+
+@tool(
+    name="campaign_status",
+    phase=6,
+    section="campaign_status",
+    summary="Show the bound target, gate progress, and what strict mode still needs.",
+    input_model=CampaignStartInput,
+    output_model=CampaignStatusOutput,
+    write_mode="none",
+    always_available=True,
+    tags=("meta", "status"),
+)
+def campaign_status(ctx: ToolContext, inp: CampaignStartInput) -> CampaignStatusOutput:
+    snapshot = ctx.state.snapshot()
+    next_phase = ctx.state.next_incomplete_phase()
+    strict_missing = ctx.state.strict_gaps()
+    strict_ready = not strict_missing
+    if next_phase is None:
+        message = "All phase gates are complete."
+    else:
+        message = f"Next incomplete phase: {next_phase}."
+    if strict_ready and ctx.state.gate_policy != "strict":
+        message += " Strict prerequisites are complete; ask the user before switching."
+    return CampaignStatusOutput(
+        workspace=str(ctx.workspace),
+        policy=ctx.state.gate_policy,
+        next_phase=next_phase,
+        phases=snapshot["phases"],
+        counts=snapshot["counts"],
+        strict_ready=strict_ready,
+        strict_missing=strict_missing,
+        message=message,
+    )
+
+
+@tool(
     name="report_issue",
     phase=6,
     section="issues",
@@ -862,6 +943,8 @@ TOOLS: list[ToolSpec] = [  # type: ignore[list-item]
     start_round,
     close_round,
     close_session,
+    start_campaign,
+    campaign_status,
     report_issue,
     generate_report,
 ]

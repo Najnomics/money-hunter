@@ -101,6 +101,9 @@ Writes `.apex/05_experiments.json`. A `prepared` test is not evidence.
 | `start_round` | Opens a bounded coverage round. |
 | `close_round` | Records whether the round made progress. |
 | `close_session` | Writes a death-note and backlog for resume. |
+| `start_campaign` | Binds a target and policy once; available at any phase. |
+| `campaign_status` | Shows the next phase and whether strict mode is ready. |
+| `report_issue` | Records pipeline friction or a missing capability. |
 | `generate_report` | Compiles the final report. |
 
 Writes `.apex/06_final_report.md` plus metadata.

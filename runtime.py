@@ -15,7 +15,7 @@ from typing import Any, Callable, Type
 from pydantic import BaseModel
 
 TOOL_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-WRITE_MODES = {"section", "append", "report"}
+WRITE_MODES = {"section", "append", "report", "none"}
 
 
 class ToolError(Exception):
@@ -28,10 +28,24 @@ class ToolError(Exception):
 
 
 @dataclass
+class SessionState:
+    """Small amount of state that lives for one MCP server process.
+
+    `start_campaign` writes the chosen target here, so later tool calls do not
+    need to repeat the workspace.  It is intentionally not persisted: a new
+    server process must bind again.
+    """
+
+    workspace: Path | None = None
+    policy_hint: str | None = None
+
+
+@dataclass
 class ToolContext:
     workspace: Path
     state: Any
     adapter: Any
+    session: Any = None
 
     def resolve(self, path: str | Path) -> Path:
         p = Path(path).expanduser()

@@ -415,6 +415,50 @@ class StateManager:
                 if unclassified:
                     missing.append("classifications:missing=" + ",".join(unclassified))
 
+    def strict_gaps(self) -> list[str]:
+        """What strict mode still needs, independent of the current policy."""
+        missing: list[str] = []
+        phase0 = self.sections(0)
+        if not phase0.get("environment"):
+            missing.append("environment")
+        phase2 = self.sections(2)
+        if not phase2.get("state_vocab"):
+            missing.append("state_vocab")
+        if not phase2.get("sinks"):
+            missing.append("sinks")
+        flows = (phase2.get("flows") or {}).get("flows", []) if isinstance(phase2.get("flows"), dict) else []
+        predictions = phase2.get("predictions") or {}
+        unplanned = [
+            str(flow.get("id")) for flow in flows
+            if flow.get("critical") and flow.get("id") not in predictions
+        ]
+        if unplanned:
+            missing.append("predictions:" + ",".join(unplanned))
+        if len(self.collect(4, "assumptions")) < 4:
+            missing.append("assumptions:min=4")
+        phase6 = self.sections(6)
+        if not phase6.get("coverage"):
+            missing.append("coverage")
+        if not phase6.get("citations"):
+            missing.append("citations")
+        confirmed = [
+            exp for exp in self.collect(5, "experiments")
+            if exp.get("status") == "ran" and exp.get("verdict") == "confirmed"
+        ]
+        classified = {
+            str(row.get("hypothesis_id")) for row in self.collect(6, "classifications")
+        }
+        unclassified = sorted({str(exp.get("hypothesis_id")) for exp in confirmed} - classified)
+        if unclassified:
+            missing.append("classifications:" + ",".join(unclassified))
+        return missing
+
+    def next_incomplete_phase(self) -> int | None:
+        for phase in range(0, 7):
+            if not self.gate_status(phase)["ok"]:
+                return phase
+        return None
+
     def require_gate(self, phase: int) -> None:
         """Raise GateError unless every earlier phase gate is complete."""
         if phase == 0:

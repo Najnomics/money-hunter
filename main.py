@@ -29,10 +29,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from adapters import get_adapter  # noqa: E402
 from registry import PluginRegistry  # noqa: E402
-from runtime import ToolContext, ToolError, ToolSpec  # noqa: E402
+from runtime import SessionState, ToolContext, ToolError, ToolSpec  # noqa: E402
 from state_manager import ArtifactError, GateError, StateError, StateManager  # noqa: E402
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 
 # --------------------------------------------------------------------- input
@@ -189,12 +189,21 @@ def build_raw_args(flags: dict[str, Any], spec: ToolSpec) -> dict[str, Any]:
 
 
 # ----------------------------------------------------------------- execution
-def execute_tool(spec: ToolSpec, raw: dict[str, Any], state: StateManager, workspace: Path) -> dict[str, Any]:
-    # One MCP server can serve every project when the agent passes `workspace`
-    # in the tool arguments.  Without it, the server's --workspace is used.
+def execute_tool(
+    spec: ToolSpec,
+    raw: dict[str, Any],
+    state: StateManager,
+    workspace: Path,
+    session: SessionState | None = None,
+) -> dict[str, Any]:
+    # Resolution order: explicit per-call workspace, then the target bound by
+    # start_campaign, then the server/CLI default.  The middle step is what
+    # makes "use apex-core on /target" a once-per-session action.
     requested_workspace = raw.get("workspace")
     if requested_workspace:
         call_workspace = Path(str(requested_workspace)).expanduser().resolve()
+    elif session is not None and session.workspace is not None:
+        call_workspace = session.workspace
     else:
         call_workspace = workspace
     call_state = (
@@ -217,6 +226,7 @@ def execute_tool(spec: ToolSpec, raw: dict[str, Any], state: StateManager, works
         workspace=call_workspace,
         state=call_state,
         adapter=get_adapter(call_state.target_profile),
+        session=session,
     )
     try:
         result = spec.handler(ctx, payload_in)
@@ -246,6 +256,8 @@ def execute_tool(spec: ToolSpec, raw: dict[str, Any], state: StateManager, works
         call_state.write_report(markdown)
         data["report_path"] = call_state.artifact_relpath(6)
         call_state.write_section(6, "report", data, spec.name)
+    elif spec.write_mode == "none":
+        pass  # meta tool; it updates config/session only
     else:  # pragma: no cover - validated by ToolSpec
         raise ToolError(f"{spec.name}: invalid write mode {spec.write_mode}")
 
@@ -259,7 +271,9 @@ def execute_tool(spec: ToolSpec, raw: dict[str, Any], state: StateManager, works
         "section": spec.section,
         "workspace": str(call_workspace),
         "artifact": (
-            call_state.meta_relpath(spec.phase)
+            ".apex/config.json"
+            if spec.write_mode == "none"
+            else call_state.meta_relpath(spec.phase)
             if spec.always_available
             else call_state.artifact_relpath(spec.phase)
         ),
@@ -299,6 +313,7 @@ def run_mcp(registry: PluginRegistry, state: StateManager, workspace: Path) -> i
     import asyncio
 
     server = Server("apex-core")
+    session = SessionState()
 
     def tool_defs() -> list[Any]:
         tools: list[Any] = []
@@ -334,7 +349,7 @@ def run_mcp(registry: PluginRegistry, state: StateManager, workspace: Path) -> i
                 },
             }
         try:
-            return execute_tool(spec, arguments or {}, state, workspace)
+            return execute_tool(spec, arguments or {}, state, workspace, session)
         except BaseException as exc:  # noqa: BLE001 - return structured MCP error
             return error_payload(exc)
 

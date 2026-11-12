@@ -47,10 +47,20 @@ missing artifact; never bypass the gate.
 Call `python main.py --status` (CLI) before starting a session to see which
 phase artifacts already exist. Resume, never restart cold.
 
-If the MCP server was configured without `--workspace`, include
-`"workspace": "/absolute/path/to/target"` in **every** tool call. If it has a
-default workspace, omit the field. One global server can serve many targets;
-each target keeps its own `.apex/`.
+If the MCP server has no fixed `--workspace`, bind one at the start of the
+session:
+
+```json
+{"workspace": "/absolute/path/to/target", "policy": "standard", "repos": ["."]}
+```
+
+Call `phase6_start_campaign` with those arguments. It binds the target for
+later calls, so `phase0_parse_scope` and the rest do not need `workspace`.
+Call `phase6_campaign_status` to see the next phase and whether strict mode is
+ready. If the client restarts, bind again.
+
+If you prefer not to bind, include `"workspace"` in every call instead. One
+global server can serve many targets; each target keeps its own `.apex/`.
 
 ## Phase rules
 

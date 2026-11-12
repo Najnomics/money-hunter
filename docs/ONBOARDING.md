@@ -128,14 +128,15 @@ pass `workspace` in each tool call:
 }
 ```
 
-Then the agent calls:
+At the start of a campaign the agent calls `phase6_start_campaign` once:
 
 ```json
-{"workspace": "/absolute/path/to/target-a", "repos": ["."]}
+{"workspace": "/absolute/path/to/target-a", "policy": "standard", "repos": ["."]}
 ```
 
-One server, every target, separate `.apex/` folders. This is the setup that
-makes MCP a true one-time installation.
+Then `phase0_parse_scope` and the rest need no target. One server serves every
+target, with separate `.apex/` folders. `phase6_campaign_status` shows the next
+phase and whether strict mode is ready. If the client restarts, bind again.
 
 *Per-target default.* Include `--workspace` if you prefer not to pass it on
 every call. If you audit several targets, either create multiple entries with
