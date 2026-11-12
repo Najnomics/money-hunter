@@ -1,7 +1,7 @@
 # Apex Core
 
 **A disciplined audit campaign manager for AI agents.**  
-**Version 1.0.3**
+**Version 1.0.4**
 
 Apex Core gives an agent a clear process for security work: understand the
 target, write down what should happen, compare it with the code, test the

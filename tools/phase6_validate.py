@@ -641,12 +641,15 @@ def _finding_markdown(
         else finding.get("remediation")
         or "Enforce the intended check or invariant at the divergence site, then add a regression test."
     )
+    severity = classification.get("severity") or draft.get("severity") or "unclassified"
+    if status.startswith("Candidate") and severity in {"critical", "high"}:
+        severity = "medium"  # unverified candidates cannot outrank the evidence cap
     lines = [
         f"# {title}",
         "",
         f"**Status:** {status}  ",
         f"**Finding ID:** {finding.get('id')}  ",
-        f"**Severity:** {draft.get('severity') or classification.get('severity', 'unclassified')}  ",
+        f"**Severity:** {severity}  ",
         f"**Proof tier:** {classification.get('proof_tier', 'candidate')}  ",
         f"**Affected:** {affected or 'see evidence below'}",
         "",
