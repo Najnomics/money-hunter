@@ -38,6 +38,10 @@ class Hypothesis(ApexModel):
     statement: str
     falsifiable_prediction: str
     sink: str = ""
+    title: Optional[str] = Field(None, description="Non-technical report title.")
+    summary: Optional[str] = Field(None, description="One non-technical sentence for the report.")
+    impact_statement: Optional[str] = Field(None, description="One non-technical impact sentence.")
+    remediation: Optional[str] = Field(None, description="Recommended fix, in plain language.")
     preconditions: list[str] = Field(default_factory=list)
     experiment_plan: str = ""
     confidence: Confidence = Confidence.LOW

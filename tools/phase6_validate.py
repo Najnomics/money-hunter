@@ -6,6 +6,9 @@ coverage round is worth running.
 """
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from fsutil import now_iso, rel_to, sha1_text, write_text_atomic
 from runtime import ToolContext, ToolSpec, ToolError, tool
 from schemas.phase6 import (
@@ -28,6 +31,9 @@ from schemas.phase6 import (
     DisproofBatch,
     DisproofCheck,
     DisproveInput,
+    DraftFindingInput,
+    DraftFindingOutput,
+    FindingDraft,
     GapRef,
     IssueBatch,
     IssueEntry,
@@ -38,7 +44,7 @@ from schemas.phase6 import (
     StartRoundInput,
 )
 from tools._shared import existing_ids, next_id, require_hypothesis
-from validation import severity_from, validate_cite, validate_cites
+from validation import parse_cite, severity_from, validate_cite, validate_cites
 
 DEFAULT_CHECKS = (
     DisproofCheck(
@@ -570,11 +576,154 @@ def report_issue(ctx: ToolContext, inp: IssueInput) -> IssueBatch:
     return IssueBatch(items=[entry], notes=notes)
 
 
+def _slug(text: str, fallback: str = "finding") -> str:
+    value = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return value[:60] or fallback
+
+
+def _one_line(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def _first_sentence(text: str) -> str:
+    clean = _one_line(text).strip("`")
+    if not clean:
+        return "Not stated."
+    return re.split(r"(?<=[.!?])\s+", clean, maxsplit=1)[0][:240]
+
+
+def _finding_markdown(
+    finding: dict,
+    divergence: dict,
+    classification: dict,
+    runs: list[dict],
+    status: str,
+    draft: dict | None = None,
+) -> str:
+    """Render the team's standard one-bug report."""
+    draft = draft or {}
+    title = draft.get("title") or finding.get("title") or _first_sentence(finding.get("statement", ""))
+    summary = draft.get("summary") or finding.get("summary") or _first_sentence(finding.get("statement", ""))
+    intended = (
+        draft.get("intended")
+        or divergence.get("expected")
+        or "The system should enforce the modelled invariant."
+    )
+    actual = (
+        draft.get("actual")
+        or divergence.get("observed")
+        or finding.get("statement")
+        or "The implementation differs."
+    )
+    impact = (
+        draft.get("impact")
+        or finding.get("impact_statement")
+        or finding.get("sink")
+        or "Impact not stated; confirm with the target owner."
+    )
+    affected = ""
+    if divergence.get("file"):
+        affected = f"`{divergence.get('file')}:{divergence.get('line', '')}`".rstrip(":`") + "`"
+    proofs = []
+    if draft.get("proof_of_code"):
+        proofs.append(f"`{draft['proof_of_code']}`")
+    for run in runs:
+        proof = run.get("artifact") or run.get("stdout_path")
+        if proof:
+            proofs.append(f"`{proof}` (experiment `{run.get('id')}`, command `{run.get('command')}`)")
+    proof_block = "\n".join(f"- {p}" for p in dict.fromkeys(proofs)) if proofs else (
+        "No executed test. This report is a **candidate**, not a verified finding."
+    )
+    recommendations = draft.get("recommendations") or []
+    remediation = (
+        "\n".join(f"- {item}" for item in recommendations)
+        if recommendations
+        else finding.get("remediation")
+        or "Enforce the intended check or invariant at the divergence site, then add a regression test."
+    )
+    lines = [
+        f"# {title}",
+        "",
+        f"**Status:** {status}  ",
+        f"**Finding ID:** {finding.get('id')}  ",
+        f"**Severity:** {draft.get('severity') or classification.get('severity', 'unclassified')}  ",
+        f"**Proof tier:** {classification.get('proof_tier', 'candidate')}  ",
+        f"**Affected:** {affected or 'see evidence below'}",
+        "",
+        "## Summary",
+        "",
+        summary,
+        "",
+        "## Description",
+        "",
+        f"**Intended behaviour.** {intended}",
+        "",
+        f"**Actual behaviour.** {actual}",
+        "",
+        *([_one_line(finding.get("statement", ""))] if not draft.get("actual") else []),
+        "",
+        "## Impact",
+        "",
+        impact,
+        "",
+        "## Proof of Code",
+        "",
+        proof_block,
+        "",
+        "## Recommendation(s)",
+        "",
+        remediation,
+        "",
+        "---",
+        "",
+        f"Divergence: `{finding.get('divergence_id')}`  ",
+        f"Evidence: {'; '.join(finding.get('evidence', [])) or 'none'}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+@tool(
+    name="draft_finding_report",
+    phase=6,
+    section="finding_drafts",
+    summary="Write the team-standard, non-technical report fields for one finding.",
+    input_model=DraftFindingInput,
+    output_model=DraftFindingOutput,
+    write_mode="append",
+    tags=("report", "finding"),
+)
+def draft_finding_report(ctx: ToolContext, inp: DraftFindingInput) -> DraftFindingOutput:
+    require_hypothesis(ctx, inp.hypothesis_id)
+    if inp.severity and inp.severity not in {"critical", "high", "medium", "low", "info"}:
+        raise ToolError("severity must be critical, high, medium, low, or info")
+    if inp.proof_of_code:
+        if parse_cite(inp.proof_of_code) is None:
+            proof_path = Path(inp.proof_of_code)
+            if not proof_path.is_absolute():
+                proof_path = ctx.workspace / proof_path
+            if not proof_path.is_file():
+                raise ToolError(f"proof_of_code file does not exist: {inp.proof_of_code}")
+        else:
+            result = validate_cite(ctx.workspace, inp.proof_of_code)
+            if not result["valid"]:
+                raise ToolError(f"proof_of_code does not resolve: {result['reason']}")
+    draft = FindingDraft(
+        id=next_id(existing_ids(ctx, 6), "FR"),
+        created_at=now_iso(),
+        **inp.model_dump(),
+    )
+    notes = []
+    if not inp.recommendations:
+        notes.append("Add at least one concrete recommendation before publishing.")
+    return DraftFindingOutput(items=[draft], notes=notes)
+
+
 @tool(
     name="generate_report",
     phase=6,
     section="report",
-    summary="Compile surviving, verified findings into .apex/06_final_report.md.",
+    summary="Compile the campaign report and one standard report per finding under .apex/reports/.",
     input_model=ReportInput,
     output_model=ReportOutput,
     write_mode="report",
@@ -597,6 +746,10 @@ def generate_report(ctx: ToolContext, inp: ReportInput) -> ReportOutput:
     chains = state.collect(4, "chains")
     coverage = state.section(6, "coverage") or {}
     classifications = state.collect(6, "classifications")
+    drafts = state.collect(6, "finding_drafts")
+    draft_by_hyp = {
+        str(row.get("hypothesis_id")): row for row in drafts if row.get("hypothesis_id")
+    }
     issues = state.collect(6, "issues")
     rounds = state.round_records()
     classification_by_hyp = {
@@ -623,6 +776,64 @@ def generate_report(ctx: ToolContext, inp: ReportInput) -> ReportOutput:
     candidates = [h for h in survivors if not verified(h)]
     rejected = [h for h in hypotheses if disproved(h)]
 
+    # Write one standard report per finding. Verified findings go under
+    # reports/verified. Surviving candidates go under reports/candidates and
+    # are clearly marked as unverified, so a build-blocked target still
+    # produces useful, honest writeups.
+    divergence_by_id = {str(d.get("id")): d for d in divergences if d.get("id")}
+    reports_dir = ctx.state.apex_dir / "reports"
+    report_entries: list[tuple[str, str, str, str]] = []
+    sections = (
+        ("verified", verified_findings, "Verified — executed evidence", 100),
+        ("candidates", candidates, "Candidate — not verified", 50),
+    )
+    for folder, items, status, limit in sections:
+        directory = reports_dir / folder
+        directory.mkdir(parents=True, exist_ok=True)
+        for stale in directory.glob("*.md"):
+            stale.unlink(missing_ok=True)
+        for finding in items[:limit]:
+            runs = experiments_by_hyp.get(str(finding.get("id")), [])
+            classification = classification_by_hyp.get(str(finding.get("id")), {})
+            divergence = divergence_by_id.get(str(finding.get("divergence_id")), {})
+            draft = draft_by_hyp.get(str(finding.get("id")))
+            filename = f"{finding.get('id')}.md"
+            path = directory / filename
+            title = (
+                (draft or {}).get("title")
+                or finding.get("title")
+                or _first_sentence(finding.get("statement", ""))
+            )
+            write_text_atomic(
+                path,
+                _finding_markdown(finding, divergence, classification, runs, status, draft),
+            )
+            report_entries.append(
+                (
+                    rel_to(path, reports_dir),
+                    _one_line(title)[:120],
+                    status,
+                    classification.get("severity", "unclassified"),
+                )
+            )
+
+    index_path = reports_dir / "index.md"
+    index_lines = [
+        "# Finding reports",
+        "",
+        f"Generated: {now_iso()}",
+        "",
+        "| Report | Status | Severity |",
+        "|---|---|---|",
+    ]
+    if report_entries:
+        for relative, title, status, severity in report_entries:
+            index_lines.append(f"| [{title}]({relative}) | {status} | {severity} |")
+    else:
+        index_lines.append("| No findings or candidates recorded | — | — |")
+    index_lines.append("")
+    write_text_atomic(index_path, "\n".join(index_lines))
+
     summary = {
         "divergences": len(divergences),
         "hypotheses": len(hypotheses),
@@ -635,6 +846,8 @@ def generate_report(ctx: ToolContext, inp: ReportInput) -> ReportOutput:
         "classifications": len(classifications),
         "rounds": len(rounds),
         "issues": len(issues),
+        "drafts": len(drafts),
+        "reports": len(report_entries),
     }
 
     title = inp.title or f"Apex Campaign Report — {ctx.workspace.name}"
@@ -675,6 +888,16 @@ def generate_report(ctx: ToolContext, inp: ReportInput) -> ReportOutput:
                 "",
             ]
         )
+
+    lines.extend(["## Finding reports", ""])
+    lines.append(f"Folder: `{rel_to(reports_dir, ctx.workspace)}` — index: `reports/index.md`")
+    lines.append("")
+    if report_entries:
+        for relative, title, status, severity in report_entries:
+            lines.append(f"- [{title}](reports/{relative}) — {status}, severity `{severity}`")
+    else:
+        lines.append("No individual finding reports were generated.")
+    lines.append("")
 
     lines.extend(["## Scope & guardrails", ""])
     allowlist = ground.get("allowlist", [])
@@ -806,9 +1029,9 @@ def generate_report(ctx: ToolContext, inp: ReportInput) -> ReportOutput:
 
     lines.extend(["## Coverage & remaining gaps (Phase 6)", ""])
     if coverage:
-        summary = coverage.get("summary", {})
+        cov_summary = coverage.get("summary", {})
         lines.append(
-            f"**Covered:** {summary.get('flows_covered', 0)}/{summary.get('flows_total', 0)} flows "
+            f"**Covered:** {cov_summary.get('flows_covered', 0)}/{cov_summary.get('flows_total', 0)} flows "
             f"({coverage.get('ratio', 0):.0%}); extractor confidence `{coverage.get('confidence')}`."
         )
         lines.append("")
@@ -941,7 +1164,12 @@ def generate_report(ctx: ToolContext, inp: ReportInput) -> ReportOutput:
     if not boundaries.get("non_destructive", True):
         lines.append("> Warning: non-destructive mode was disabled for this campaign.")
 
-    return ReportOutput(markdown="\n".join(lines) + "\n", summary=summary)
+    return ReportOutput(
+        markdown="\n".join(lines) + "\n",
+        summary=summary,
+        reports_dir=rel_to(reports_dir, ctx.workspace),
+        report_files=[relative for relative, _, _, _ in report_entries],
+    )
 
 
 TOOLS: list[ToolSpec] = [  # type: ignore[list-item]
@@ -955,5 +1183,6 @@ TOOLS: list[ToolSpec] = [  # type: ignore[list-item]
     start_campaign,
     campaign_status,
     report_issue,
+    draft_finding_report,
     generate_report,
 ]

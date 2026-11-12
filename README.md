@@ -1,7 +1,7 @@
 # Apex Core
 
 **A disciplined audit campaign manager for AI agents.**  
-**Version 1.0.2**
+**Version 1.0.3**
 
 Apex Core gives an agent a clear process for security work: understand the
 target, write down what should happen, compare it with the code, test the
@@ -116,6 +116,19 @@ python /ABS/PATH/apex-core/main.py --status --workspace /ABS/PATH/TARGET
 
 Read the JSON response; do not scrape console text.
 
+
+## Finding reports
+
+At the end of a campaign, `phase6_generate_report` writes:
+
+- `.apex/06_final_report.md` — the campaign report
+- `.apex/reports/index.md` — one line per finding
+- `.apex/reports/verified/H-xxxx.md` — standard report per verified finding
+- `.apex/reports/candidates/H-xxxx.md` — clearly marked unverified candidates
+
+Each finding report uses: Title, Severity, Summary, Description (intended vs
+actual), Impact, Proof of Code, and Recommendation(s). Use
+`phase6_draft_finding_report` first for non-technical wording.
 
 ## Team onboarding
 

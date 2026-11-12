@@ -57,6 +57,8 @@ class ReportOutput(ApexModel):
     markdown: str
     summary: dict[str, int] = Field(default_factory=dict)
     report_path: Optional[str] = None
+    reports_dir: Optional[str] = None
+    report_files: list[str] = Field(default_factory=list)
 
 
 class CitationCheckInput(ApexModel):
@@ -228,6 +230,30 @@ class CampaignStartOutput(ApexModel):
     next_tool: str
     next_args: dict[str, Any] = Field(default_factory=dict)
     message: str
+
+
+class DraftFindingInput(ApexModel):
+    """Human-quality standard report fields for one finding."""
+
+    hypothesis_id: str
+    title: str
+    summary: str = Field(..., description="One non-technical sentence.")
+    intended: str = Field(..., description="What the system is supposed to do.")
+    actual: str = Field(..., description="What it actually does.")
+    impact: str = Field(..., description="One non-technical impact sentence.")
+    proof_of_code: Optional[str] = Field(None, description="Path to the test/PoC that proves it.")
+    recommendations: list[str] = Field(default_factory=list)
+    severity: Optional[str] = None
+
+
+class FindingDraft(DraftFindingInput):
+    id: str
+    created_at: str = ""
+
+
+class DraftFindingOutput(ApexModel):
+    items: list[FindingDraft] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
 
 
 class CampaignStatusOutput(ApexModel):

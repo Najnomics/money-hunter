@@ -16,6 +16,7 @@ Every target keeps its campaign state in `.apex/` inside the target folder.
   06_final_report.md        report
   06_report_meta.json       coverage, citations, classifications, rounds, session
   predictions/              blind skeletons and prediction markdown
+  reports/                  index + one standard report per finding
   experiments/              generated tests and captured logs
   sandbox/                  provisioned harnesses
   sweep/                    saved inventory files

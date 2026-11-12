@@ -160,8 +160,13 @@ Also use:
    produces no new divergence, hypothesis, experiment, or disposition is
    `stalled` and must not be repeated without new evidence.
 6. `close_session` writes a death-note and backlog before a campaign stops.
-7. `generate_report` compiles only verified findings. Candidates stay labeled
-   as unverified. If nothing is verified, say so explicitly.
+7. For every finding you intend to publish, call `draft_finding_report` with
+   the non-technical fields: title, one-line summary, intended behaviour,
+   actual behaviour, one-line impact, proof path, and recommendations.
+8. `generate_report` compiles only verified findings and writes one standard
+   report per finding under `.apex/reports/verified/`. Candidates go under
+   `.apex/reports/candidates/` and are clearly marked unverified. If nothing is
+   verified, say so explicitly.
 
 ## Report pipeline problems immediately
 

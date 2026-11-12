@@ -36,6 +36,8 @@ class ASTMapInput(ApexModel):
     paths: list[str] = Field(default_factory=list, description="Source paths to map. Empty = scope repos / workspace.")
     languages: list[str] = Field(default_factory=list)
     model_flows: list[str] = Field(default_factory=list, description="Optional flow-id filter.")
+    include_tests: bool = Field(False, description="Include test/mock/fixture trees in the surface map.")
+    exclude_globs: list[str] = Field(default_factory=list, description="Additional path globs to skip.")
     max_files: int = Field(5000, ge=1, le=50000)
 
 

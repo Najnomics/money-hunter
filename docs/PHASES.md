@@ -104,7 +104,8 @@ Writes `.apex/05_experiments.json`. A `prepared` test is not evidence.
 | `start_campaign` | Binds a target and policy once; available at any phase. |
 | `campaign_status` | Shows the next phase and whether strict mode is ready. |
 | `report_issue` | Records pipeline friction or a missing capability. |
-| `generate_report` | Compiles the final report. |
+| `draft_finding_report` | Writes one standard, non-technical finding report. |
+| `generate_report` | Compiles the campaign report and `.apex/reports/` index. |
 
 Writes `.apex/06_final_report.md` plus metadata.
 

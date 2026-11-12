@@ -6,6 +6,7 @@ into candidates with a file and line, never into findings directly.
 """
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
 import shutil
@@ -45,6 +46,27 @@ SINK_WORDS = re.compile(
     r"delegate|approve|set[A-Z]|update|delete|destroy|kill|callback|settle|liquidat)",
     re.I,
 )
+
+# Audit production behaviour, not the target's own tests.  A test named
+# `test_withdraw` used to look like a value-sink entrypoint and flooded the map.
+TEST_DIRS = {
+    "test", "tests", "__tests__", "spec", "specs", "testdata", "fixtures",
+    "mocks", "mock", "vendor", "third_party", "benchmarks", "examples",
+}
+
+
+def _is_test_path(path: Path) -> bool:
+    parts = {part.lower() for part in path.parts}
+    if parts & TEST_DIRS:
+        return True
+    name = path.name.lower()
+    return (
+        name.startswith("test_")
+        or name.startswith("test-")
+        or "_test." in name
+        or ".test." in name
+        or ".spec." in name
+    )
 
 
 def _scope_paths(ctx: ToolContext) -> list[str]:
@@ -89,14 +111,25 @@ def _alloc_divergence(existing: set[str], prefix: str = "DIV") -> str:
 )
 def ast_divergence_mapper(ctx: ToolContext, inp: ASTMapInput) -> ASTMapOutput:
     raw_paths = inp.paths or _scope_paths(ctx)
-    files = walk_files([ctx.resolve(p) for p in raw_paths], max_files=inp.max_files, exts=source_exts())
+    all_files = walk_files([ctx.resolve(p) for p in raw_paths], max_files=inp.max_files, exts=source_exts())
+    files = all_files
+    if not inp.include_tests:
+        files = [f for f in files if not _is_test_path(f)]
+    if inp.exclude_globs:
+        files = [
+            f for f in files
+            if not any(fnmatch.fnmatch(rel_to(f, ctx.workspace), pattern) for pattern in inp.exclude_globs)
+        ]
+    filtered = len(all_files) - len(files)
     if not files:
         raise ToolError(
-            "No source files found to map.",
-            details={"paths": raw_paths, "hint": "Pass --paths with the implementation root."},
+            "No production source files found to map.",
+            details={"paths": raw_paths, "filtered_test_or_excluded": filtered},
         )
 
     hits, method, languages = ctx.adapter.surfaces(files, ctx.workspace, max_surfaces=3000)
+    if not inp.include_tests:
+        hits = [h for h in hits if not h.name.lower().startswith(("test_", "test"))]
     surfaces = [
         Surface(
             file=h.file,
@@ -195,6 +228,10 @@ def ast_divergence_mapper(ctx: ToolContext, inp: ASTMapInput) -> ASTMapOutput:
     if not surfaces:
         notes.append("No surfaces extracted. Check extensions or install tree-sitter-language-pack.")
     notes.append(f"Extracted {len(surfaces)} surface(s); {len(mapped)} flow(s) mapped to code.")
+    if filtered:
+        notes.append(
+            f"Skipped {filtered} test/mock/fixture file(s); pass --include-tests true to map them."
+        )
 
     return ASTMapOutput(
         surfaces=surfaces[:3000],

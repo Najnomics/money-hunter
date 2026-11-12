@@ -40,7 +40,7 @@ Run `python main.py --list` to print the live list.
 
 | Tool | Input highlights | Writes |
 |---|---|---|
-| `ast_divergence_mapper` | `paths`, `languages`, `model_flows` | `ast_map` |
+| `ast_divergence_mapper` | `paths`, `languages`, `model_flows`, `include_tests` | `ast_map` |
 | `targeted_static_sweep` | `paths`, `tools`, `semgrep_config` | `static_sweep` |
 | `diff_prediction` | `flow_id`, `verdict`, `expected`, `observed`, `file`, `line` | `prediction_diff` |
 | `sweep_inventory` | `rule_name`, `pattern`, `paths`, `extensions` | `sweep_inventory` |
@@ -81,7 +81,8 @@ Every tool requires a valid `divergence_id`.
 | `start_campaign` | `workspace`, `policy`, `repos`, `endpoints` | `config.json` (binds target; any phase) |
 | `campaign_status` | optional `workspace` | gate progress + strict readiness (any phase) |
 | `report_issue` | `kind`, `title`, `description`, `tool`, `severity`, `requested_change` | `issues` (available at any phase) |
-| `generate_report` | mirror fields, `include_theoretical` | `06_final_report.md` |
+| `draft_finding_report` | `hypothesis_id`, title, summary, intended, actual, impact, proof, recommendations | `finding_drafts` |
+| `generate_report` | mirror fields, `include_theoretical` | `06_final_report.md` + `.apex/reports/` |
 
 ## Common argument forms
 
