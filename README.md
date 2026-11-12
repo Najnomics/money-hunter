@@ -119,7 +119,7 @@ Read the JSON response; do not scrape console text.
 
 ## Finding reports
 
-At the end of a campaign, `phase6_generate_report` writes:
+At the end of a campaign, `phase6_report` action `generate` writes:
 
 - `.apex/06_final_report.md` — the campaign report
 - `.apex/reports/index.md` — one line per finding
