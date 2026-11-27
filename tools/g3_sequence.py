@@ -93,6 +93,17 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
+        id="pending_close",
+        when_fn=_re(r"withdraw"),
+        when_var=_re(r"rebate"),
+        when_family=frozenset(),
+        setup="_commitClose(ATTACKER);",
+        why=(
+            "A live rebate reserve is still locked while the position is open. "
+            "Commit a close first so withdraw can waive or release that backing."
+        ),
+    ),
+    SequenceStrategy(
         id="thin_pool",
         when_fn=_re(r"executeClose|executeOrder|executeOpen"),
         when_var=_re(r"degradedMode|emergency|frozen"),

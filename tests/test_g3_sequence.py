@@ -33,10 +33,13 @@ class SequenceSelectionTests(unittest.TestCase):
     def test_withdraw_rebate_holds_a_skew_reducing_open(self):
         chosen = select_strategies("withdraw", "vpiRebateReserve", "refundable-receipt-in-nav")
         self.assertIn("rebate_held", chosen)
+        self.assertIn("pending_close", chosen)
         self.assertNotIn("filled_position", chosen)
         src = setup_block("withdraw", "vpiRebateReserve", "refundable-receipt-in-nav")
         self.assertIn("_openFilled(VICTIM", src)
         self.assertIn("_openFilled(ATTACKER, _short()", src)
+        self.assertIn("_commitClose(ATTACKER)", src)
+        self.assertLess(src.index("_openFilled(ATTACKER, _short()"), src.index("_commitClose"))
 
     def test_execute_open_rebate_seeds_opposite_skew(self):
         chosen = select_strategies("executeOpen", "vpiRebateReserve", "refundable-receipt-in-nav")
@@ -92,9 +95,11 @@ class SequenceSelectionTests(unittest.TestCase):
 
     def test_close_helper_uses_live_mark_not_hardcoded_shock(self):
         src = (ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol").read_text(encoding="utf-8")
-        close = src.split("function _closeFilled", 1)[1].split("function ", 1)[0]
+        close = src.split("function _closeFilled", 1)[1]
         self.assertIn("lastMarkPrice", close)
-        self.assertIn("engine.positions(who)", close)
+        self.assertIn("_commitClose(who)", close)
+        self.assertIn("function _commitClose", src)
+        self.assertIn("engine.positions(who)", src)
         self.assertNotIn("_mockPythUpdateData(1.5e8)", close)
 
     def test_strategy_module_has_no_finding_ids(self):

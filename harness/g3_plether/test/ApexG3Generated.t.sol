@@ -132,6 +132,8 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_withdraw_vpiRebateReserve() public {
         // strategy:rebate_held — Close/withdraw rebate probes need an already-locked negative-VPI reserve from a skew-reducing open, not a lone long.
         _openFilled(VICTIM, _long(), 60); _openFilled(ATTACKER, _short(), 60);
+        // strategy:pending_close — A live rebate reserve is still locked while the position is open. Commit a close first so withdraw can waive or release that backing.
+        _commitClose(ATTACKER);
         _snapshotRebate(ATTACKER);
         uint256 free = _freeOf(ATTACKER);
         if (free > 0) { vm.prank(ATTACKER); clearinghouse.withdraw(ATTACKER, free); }

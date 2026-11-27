@@ -174,12 +174,16 @@ abstract contract G3Sequence is BasePerpTest {
         stdstore.target(address(juniorVault)).sig("totalSupply()").checked_write(type(uint256).max - 500);
     }
 
+    function _commitClose(address who) internal returns (uint64 oid) {
+        (uint256 size,,,, CfdTypes.Side side,,) = engine.positions(who);
+        vm.prank(who);
+        oid = router.commitOrder(side, size == 0 ? 50_000e18 : size, 0, 0, true);
+    }
+
     function _closeFilled(address who) internal {
         // Close at the live mark. A hardcoded 1.5e8 shock makes any close move NAV,
         // so rebate/sharePrice probes cannot be distinguished from directional PnL.
-        (uint256 size,,,, CfdTypes.Side side,,) = engine.positions(who);
-        vm.prank(who);
-        uint64 oid = router.commitOrder(side, size == 0 ? 50_000e18 : size, 0, 0, true);
+        uint64 oid = _commitClose(who);
         uint256 mark = engine.lastMarkPrice();
         router.executeOrder(oid, _mockPythUpdateData(mark == 0 ? 1e8 : mark));
     }
