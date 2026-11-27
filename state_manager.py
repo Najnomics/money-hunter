@@ -268,10 +268,14 @@ class StateManager:
         merged = dict(payload)
         merge_lists = {
             (3, "prediction_diff"): ("divergences",),
+            (3, "research_divs"): ("divergences",),
             (4, "dimensional"): ("hypotheses",),
             (4, "reverse_engineer"): ("hypotheses",),
             (4, "state_machine"): ("hypotheses",),
             (4, "trust_boundary"): ("hypotheses",),
+            (4, "research_seeds"): ("hypotheses",),
+            (4, "gap_fill"): ("hypotheses",),
+            (4, "batteries"): ("items", "hypotheses"),
         }.get((phase, section), ())
         for key in merge_lists:
             old_items = previous.get(key)

@@ -220,25 +220,39 @@ def coverage_check(ctx: ToolContext, inp: CoverageInput) -> CoverageOutput:
     sinks = (state.section(2, "sinks") or {}).get("sinks", [])
     chains = state.collect(4, "chains")
 
-    covered_flow_ids = {str(d.get("flow_id")) for d in divergences if d.get("flow_id")}
+    unmapped_kinds = {"unmapped_critical_flow", "unmapped_flow"}
+    real_divs = [d for d in divergences if d.get("kind") not in unmapped_kinds]
+    covered_flow_ids = {str(d.get("flow_id")) for d in real_divs if d.get("flow_id")}
+    for flow_id, locations in (mapped_flows or {}).items():
+        if locations:
+            covered_flow_ids.add(str(flow_id))
     tested_ids = {str(e.get("hypothesis_id")) for e in experiments if e.get("hypothesis_id")}
     disproved_ids = {str(d.get("hypothesis_id")) for d in disproofs if d.get("hypothesis_id")}
     chain_sinks = {str(c.get("sink_id")) for c in chains if c.get("sink_id")}
     hypothesis_sinks = {str(h.get("sink")) for h in hypotheses if h.get("sink")}
 
     gaps: list[GapRef] = []
+    unmapped_critical: list[str] = []
     for flow in flows:
         flow_id = str(flow.get("id"))
-        if flow_id not in covered_flow_ids:
+        mapped_here = bool(mapped_flows.get(flow_id))
+        if flow_id not in covered_flow_ids and not mapped_here:
+            critical = bool(flow.get("critical"))
+            if critical:
+                unmapped_critical.append(flow_id)
             gaps.append(
                 GapRef(
                     id=f"GAP-FLOW-{flow_id}",
-                    type="flow",
-                    description=f"Flow {flow_id} ({flow.get('name')}) has no mapped divergence yet.",
+                    type="unmapped_critical_flow" if critical else "flow",
+                    description=(
+                        f"Critical flow {flow_id} ({flow.get('name')}) is unmapped. Coverage fails closed."
+                        if critical
+                        else f"Flow {flow_id} ({flow.get('name')}) has no mapped divergence yet."
+                    ),
                     next_phase=3,
                     next_tool="ast_divergence_mapper",
                     flow_id=flow_id,
-                    ev_rank=80 if flow.get("critical") else 40,
+                    ev_rank=100 if critical else 40,
                 )
             )
 
@@ -306,21 +320,70 @@ def coverage_check(ctx: ToolContext, inp: CoverageInput) -> CoverageOutput:
                 )
             )
 
+    gap_fill = state.section(4, "gap_fill") or {}
+    research_seeds = state.section(4, "research_seeds") or {}
+    seeded_from = list(gap_fill.get("seeded_from") or []) + list(research_seeds.get("seeded_from") or [])
+    ran_self_check = bool(gap_fill) or "never-generated" in seeded_from
+    if not ran_self_check:
+        gaps.append(
+            GapRef(
+                id="GAP-NEVER-GENERATED",
+                type="self-check",
+                description=(
+                    "Never-generated self-check has not run. After hypothesis generation, "
+                    "enumerate each state-changing external function × value-bearing state var."
+                ),
+                next_phase=4,
+                next_tool="never_generated_check",
+                ev_rank=95,
+            )
+        )
+    uncovered_pairs = list(gap_fill.get("uncovered") or []) or list(research_seeds.get("uncovered") or [])
+    for pair in uncovered_pairs[:20]:
+        gaps.append(
+            GapRef(
+                id=f"GAP-PAIR-{sha1_text(str(pair))[:8]}",
+                type="pair",
+                description=f"No hypothesis touches mutator × var pair {pair}.",
+                next_phase=4,
+                next_tool="never_generated_check",
+                ev_rank=90,
+            )
+        )
+
     gaps.sort(key=lambda gap: gap.ev_rank, reverse=True)
     total = len(flows)
     covered = len([flow for flow in flows if str(flow.get("id")) in covered_flow_ids])
-    ratio = round((covered / total), 3) if total else 0.0
-    confidence = "pattern" if ast_map.get("method") in {"tree-sitter", "tree-sitter+regex"} else "lower-bound"
+    fail_closed = bool(unmapped_critical)
+    ratio = 0.0 if fail_closed else (round((covered / total), 3) if total else 0.0)
+    if fail_closed:
+        confidence = "fail-closed"
+    elif ast_map.get("method") in {"tree-sitter", "tree-sitter+regex"}:
+        confidence = "pattern"
+    else:
+        confidence = "lower-bound"
     surfaces_mapped = sum(
         1 for surface in surfaces
         if f"{surface.get('file')}:{surface.get('line')}" in mapped_surface_keys
         or f"{surface.get('file')}:{surface.get('line')}" in divergence_locations
     )
 
+    reported_covered = 0 if fail_closed else covered
+    notes = [
+        f"covered {reported_covered}/{total} flows ({int(ratio * 100)}%)",
+        "Coverage is a ratio, not a quota. High-EV gaps are ranked first.",
+    ]
+    if fail_closed:
+        notes.insert(
+            0,
+            "FAIL-CLOSED: at least one critical flow is unmapped. Ratio forced to 0. "
+            f"Unmapped critical flow(s): {', '.join(unmapped_critical)}.",
+        )
+
     return CoverageOutput(
         summary={
             "flows_total": total,
-            "flows_covered": covered,
+            "flows_covered": 0 if fail_closed else covered,
             "surfaces_total": len(surfaces),
             "surfaces_mapped": surfaces_mapped,
             "sinks_total": len(sinks),
@@ -328,14 +391,13 @@ def coverage_check(ctx: ToolContext, inp: CoverageInput) -> CoverageOutput:
             "hypotheses_tested": len(tested_ids),
             "disproofs": len(disproofs),
             "gaps": len(gaps),
+            "fail_closed": 1 if fail_closed else 0,
+            "unmapped_critical_flows": len(unmapped_critical),
         },
         ratio=ratio,
         confidence=confidence,
         gaps=gaps[: inp.max_gaps],
-        notes=[
-            f"covered {covered}/{total} flows ({int(ratio * 100)}%)",
-            "Coverage is a ratio, not a quota. High-EV gaps are ranked first.",
-        ],
+        notes=notes,
     )
 
 
@@ -879,7 +941,12 @@ def generate_report(ctx: ToolContext, inp: ReportInput) -> ReportOutput:
         f"- {summary['assumptions']} assumption row(s); {summary['chains']} composed chain(s).",
         f"- Coverage: {coverage.get('ratio', 0):.0%} of modelled flows "
         f"({coverage.get('summary', {}).get('flows_covered', 0)}/"
-        f"{coverage.get('summary', {}).get('flows_total', 0)}), confidence `{coverage.get('confidence', 'unknown')}`.",
+        f"{coverage.get('summary', {}).get('flows_total', 0)}), confidence `{coverage.get('confidence', 'unknown')}`"
+        + (
+            " — **fail-closed** because a critical flow is unmapped."
+            if coverage.get("confidence") == "fail-closed" or (coverage.get("summary") or {}).get("fail_closed")
+            else "."
+        ),
         "",
     ]
 
@@ -1037,6 +1104,13 @@ def generate_report(ctx: ToolContext, inp: ReportInput) -> ReportOutput:
             f"**Covered:** {cov_summary.get('flows_covered', 0)}/{cov_summary.get('flows_total', 0)} flows "
             f"({coverage.get('ratio', 0):.0%}); extractor confidence `{coverage.get('confidence')}`."
         )
+        if coverage.get("confidence") == "fail-closed" or cov_summary.get("fail_closed"):
+            lines.append("")
+            lines.append(
+                "> **Fail-closed.** At least one critical flow is unmapped "
+                f"({cov_summary.get('unmapped_critical_flows', '?')}). "
+                "The coverage ratio is 0 until every critical flow has a real AST mapping."
+            )
         lines.append("")
         gaps = coverage.get("gaps", [])
         if gaps:

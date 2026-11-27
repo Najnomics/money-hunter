@@ -18,6 +18,7 @@ from schemas.phase4 import (
     AssumptionBatch,
     AssumptionInput,
     BatteryBatch,
+    BatteryCheck,
     BatteryInput,
     BatteryResult,
     ChainBatch,
@@ -25,11 +26,24 @@ from schemas.phase4 import (
     DimensionalInput,
     Hypothesis,
     HypothesisBatch,
+    NeverGeneratedInput,
     ReverseInput,
+    SeedResearchInput,
     StateMachineInput,
     TrustBoundaryInput,
 )
 from tools._shared import existing_ids, next_id, require_divergence, scan_files, source_exts
+from tools.hypothesis_seed import (
+    covered_pairs,
+    ensure_anchor_divergence,
+    enumerate_pairs,
+    family_ids_in_hypotheses,
+    hypotheses_for_uncovered_pairs,
+    hypotheses_from_audits,
+    hypotheses_from_families,
+    hypotheses_from_intel,
+)
+from tools.protocol_families import families_for_battery
 from validation import fact_ok, validate_cite
 
 DIMENSIONAL_PATTERNS = (
@@ -364,32 +378,54 @@ def assumption_inventory(ctx: ToolContext, inp: AssumptionInput) -> AssumptionBa
     name="run_battery",
     phase=4,
     section="batteries",
-    summary="Run a triggered test battery (vault, lifecycle, or boundary) instead of waiting for inspiration.",
+    summary="Run a triggered test battery (vault, lifecycle, or boundary). Empty checks load the default protocol-agnostic share-price families.",
     input_model=BatteryInput,
     output_model=BatteryBatch,
-    write_mode="append",
+    write_mode="section",
     tags=("battery", "conditional-gate"),
 )
 def run_battery(ctx: ToolContext, inp: BatteryInput) -> BatteryBatch:
     allowed = {"vault", "lifecycle", "boundary"}
     if inp.battery not in allowed:
         raise ToolError(f"battery must be one of {sorted(allowed)}")
-    outcomes = {check.outcome for check in inp.checks}
+    families = families_for_battery(inp.battery)
+    checks = list(inp.checks)
+    notes: list[str] = []
+    if not checks:
+        checks = [
+            BatteryCheck(
+                name=family.check_name,
+                outcome="inconclusive",
+                note=family.title,
+            )
+            for family in families
+        ]
+        notes.append(
+            f"Loaded {len(checks)} default {inp.battery} family check(s). "
+            "They stay inconclusive until an executed experiment fires or kills them."
+        )
+    trigger = inp.trigger.strip() or "; ".join(family.id for family in families)
+    outcomes = {check.outcome for check in checks}
     if "fired" in outcomes:
         outcome = "fired"
-    elif inp.checks and outcomes == {"not_triggered"}:
+    elif checks and outcomes == {"not_triggered"}:
         outcome = "not_triggered"
     else:
         outcome = "inconclusive"
     result = BatteryResult(
         id=next_id(existing_ids(ctx, 4), "BAT"),
         battery=inp.battery,
-        trigger=inp.trigger,
+        trigger=trigger,
         outcome=outcome,
-        checks=inp.checks,
+        checks=checks,
         notes=["A fired battery needs an evidence path; an inconclusive battery stays open."],
     )
-    return BatteryBatch(items=[result])
+    divergence = ensure_anchor_divergence(ctx, inp.divergence_id)
+    reserved: set[str] = set()
+    hypotheses = hypotheses_from_families(ctx, divergence, reserved, battery=inp.battery)
+    if hypotheses:
+        notes.append(f"Seeded {len(hypotheses)} protocol-family hypothesis(es) from the {inp.battery} battery.")
+    return BatteryBatch(items=[result], hypotheses=hypotheses, notes=notes)
 
 
 @tool(
@@ -456,6 +492,124 @@ def chain_hypotheses(ctx: ToolContext, inp: ChainInput) -> ChainBatch:
     return ChainBatch(items=inp.chains, notes=["Chains are rated by end-impact, not by the number of steps."])
 
 
+@tool(
+    name="seed_from_research",
+    phase=4,
+    section="research_seeds",
+    summary="Turn intel matches, past-audit findings, and protocol families into divergence-anchored hypotheses.",
+    input_model=SeedResearchInput,
+    output_model=HypothesisBatch,
+    tags=("intel", "generative"),
+)
+def seed_from_research(ctx: ToolContext, inp: SeedResearchInput) -> HypothesisBatch:
+    divergence = ensure_anchor_divergence(ctx, inp.divergence_id)
+    reserved: set[str] = set()
+    existing = ctx.state.hypotheses()
+    hypotheses: list[Hypothesis] = []
+    seeded_from: list[str] = []
+    if inp.include_families:
+        families = hypotheses_from_families(ctx, divergence, reserved, existing=existing + [h.model_dump() for h in hypotheses])
+        hypotheses.extend(families)
+        if families:
+            seeded_from.append("families")
+    if inp.include_intel:
+        intel = hypotheses_from_intel(
+            ctx, divergence, reserved, existing=existing + [h.model_dump() for h in hypotheses]
+        )
+        hypotheses.extend(intel)
+        if intel:
+            seeded_from.append("intel")
+    if inp.include_audits:
+        audits = hypotheses_from_audits(
+            ctx, divergence, reserved, existing=existing + [h.model_dump() for h in hypotheses]
+        )
+        hypotheses.extend(audits)
+        if audits:
+            seeded_from.append("audits")
+    hypotheses = hypotheses[: inp.max_hypotheses]
+    notes = [
+        f"Seeded {len(hypotheses)} hypothesis(es) from {seeded_from or ['nothing new — families already present']}."
+    ]
+    if hypotheses:
+        # Persist first so never_generated_check sees these ids and texts.
+        ctx.state.write_section(
+            4,
+            "research_seeds",
+            {"hypotheses": [h.model_dump(mode="json") for h in hypotheses]},
+            "seed_from_research",
+        )
+    if inp.fill_never_generated:
+        gap = never_generated_check.handler(
+            ctx,
+            NeverGeneratedInput(divergence_id=str(divergence.get("id")), max_generate=inp.max_pairs),
+        )
+        ctx.state.write_section(4, "gap_fill", gap.model_dump(mode="json"), "never_generated_check")
+        hypotheses.extend(gap.hypotheses)
+        notes.extend(gap.notes)
+        if gap.hypotheses or gap.pairs_total:
+            seeded_from = seeded_from + ["never-generated"]
+        return HypothesisBatch(
+            hypotheses=hypotheses,
+            notes=notes,
+            seeded_from=seeded_from,
+            families_applied=sorted(family_ids_in_hypotheses([h.model_dump() for h in hypotheses] + existing)),
+            pairs_total=gap.pairs_total,
+            pairs_covered=gap.pairs_covered,
+            pairs_generated=gap.pairs_generated,
+            uncovered=gap.uncovered,
+        )
+    return HypothesisBatch(
+        hypotheses=hypotheses,
+        notes=notes,
+        seeded_from=seeded_from,
+        families_applied=sorted(family_ids_in_hypotheses([h.model_dump() for h in hypotheses] + existing)),
+    )
+
+
+@tool(
+    name="never_generated_check",
+    phase=4,
+    section="gap_fill",
+    summary="After hypothesis generation: every state-changing external function × value-bearing state var must be touched, or one hypothesis is generated.",
+    input_model=NeverGeneratedInput,
+    output_model=HypothesisBatch,
+    tags=("coverage", "generative"),
+)
+def never_generated_check(ctx: ToolContext, inp: NeverGeneratedInput) -> HypothesisBatch:
+    divergence = ensure_anchor_divergence(ctx, inp.divergence_id)
+    pairs = enumerate_pairs(ctx)
+    existing = ctx.state.hypotheses()
+    covered = covered_pairs(existing, pairs)
+    uncovered = [(fn, var, surface) for fn, var, surface in pairs if (fn, var) not in covered]
+    reserved: set[str] = set()
+    generated = hypotheses_for_uncovered_pairs(
+        ctx, divergence, reserved, pairs, uncovered, inp.max_generate
+    )
+    leftover = uncovered[len(generated):]
+    notes = [
+        f"Enumerated {len(pairs)} mutator × value-var pair(s); {len(covered)} already touched; "
+        f"generated {len(generated)}; {len(leftover)} still uncovered."
+    ]
+    if not pairs:
+        notes.append(
+            "No mutator × value-var pairs found. Map surfaces (Phase 3) and state vocabulary / sinks (Phase 2)."
+        )
+    if leftover:
+        notes.append(
+            f"{len(leftover)} pair(s) remain; rerun never_generated_check to continue. "
+            "Coverage treats leftover pairs as high-EV gaps."
+        )
+    return HypothesisBatch(
+        hypotheses=generated,
+        notes=notes,
+        seeded_from=["never-generated"],
+        pairs_total=len(pairs),
+        pairs_covered=len(covered),
+        pairs_generated=len(generated),
+        uncovered=[f"{fn}::{var}" for fn, var, _ in leftover],
+    )
+
+
 TOOLS: list[ToolSpec] = [  # type: ignore[list-item]
     dimensional_checker,
     reverse_engineer_tool,
@@ -464,4 +618,6 @@ TOOLS: list[ToolSpec] = [  # type: ignore[list-item]
     assumption_inventory,
     run_battery,
     chain_hypotheses,
+    seed_from_research,
+    never_generated_check,
 ]

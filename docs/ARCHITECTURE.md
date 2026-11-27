@@ -44,6 +44,7 @@ apex-core/
 │   ├── phase5_sandbox.py
 │   └── phase6_validate.py
 ├── schemas/                # Pydantic input/output models
+├── data/intel-patterns/    # bundled technique cards (check_intel always scans)
 ├── SYSTEM_PROMPT.md        # universal harness instructions
 └── requirements.txt
 ```

@@ -57,6 +57,7 @@ VIEWISH_SETTLEMENT = re.compile(
 )
 UNDOCUMENTED_CAP = 200
 SLITHER_RAN_CODES = {0, 1, 255}
+UNMAPPED_KINDS = {"unmapped_critical_flow", "unmapped_flow"}
 
 # Audit production behaviour, not the target's own tests.  A test named
 # `test_withdraw` used to look like a value-sink entrypoint and flooded the map.

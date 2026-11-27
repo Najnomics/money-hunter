@@ -50,6 +50,11 @@ Coverage is a **ratio of dispositions**, not a count of files read.
 The report prints `covered N/M (P%)`. If the extractor only understands some
 languages, the honest label is `lower-bound`, not `complete`.
 
+**Fail closed.** An `unmapped_critical_flow` divergence is a gap, not coverage.
+If any critical flow has no real AST mapping, `coverage_check` sets ratio to 0
+and confidence to `fail-closed`. Do not treat “8/14 flows have a DIV-*” as done
+when the DIVs are unmapped stubs.
+
 ## Gap types and where they go
 
 | Gap | Next phase | Why |
@@ -61,6 +66,8 @@ languages, the honest label is `lower-bound`, not `complete`.
 | Hypothesis has no experiment | 5 | It is still a candidate |
 | Hypothesis has no kill-pass | 6 | It has not been attacked |
 | Sink has no hypothesis or chain | 4 | No one has tried to reach the valuable outcome |
+| Critical flow unmapped | 3 | Fail-closed; ratio is 0 until the entry maps |
+| Never-generated self-check not run, or mutator × var pair untouched | 4 | `never_generated_check` must name every pair |
 
 Sending every gap to Phase 3 is the common mistake. It produces a pile of
 “undocumented entrypoint” notes with no model to interpret them.

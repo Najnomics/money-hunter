@@ -48,11 +48,18 @@ class Hypothesis(ApexModel):
     status: str = "open"
     trusted_actor: bool = Field(False, description="True if the path needs an admin/keeper/operator action.")
     evidence: list[str] = Field(default_factory=list)
+    family: Optional[str] = Field(None, description="Protocol-family id when this hyp was seeded from a catalog.")
 
 
 class HypothesisBatch(ApexModel):
     hypotheses: list[Hypothesis] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+    seeded_from: list[str] = Field(default_factory=list)
+    families_applied: list[str] = Field(default_factory=list)
+    pairs_total: int = 0
+    pairs_covered: int = 0
+    pairs_generated: int = 0
+    uncovered: list[str] = Field(default_factory=list)
 
 
 class Assumption(ApexModel):
@@ -92,10 +99,11 @@ class BatteryCheck(ApexModel):
 
 
 class BatteryInput(ApexModel):
-    battery: str = Field(..., description="vault | lifecycle | boundary")
-    trigger: str
+    battery: str = Field("vault", description="vault | lifecycle | boundary. vault is the default share-price battery.")
+    trigger: str = Field("", description="What fired the battery. Empty = default protocol-family triggers.")
     checks: list[BatteryCheck] = Field(default_factory=list)
     notes: Optional[str] = None
+    divergence_id: Optional[str] = Field(None, description="Optional DIV-* to anchor generated hypotheses.")
 
 
 class BatteryResult(ApexModel):
@@ -109,7 +117,26 @@ class BatteryResult(ApexModel):
 
 class BatteryBatch(ApexModel):
     items: list[BatteryResult] = Field(default_factory=list)
+    hypotheses: list[Hypothesis] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+
+
+class SeedResearchInput(ApexModel):
+    divergence_id: Optional[str] = Field(None, description="Optional DIV-* anchor. Empty = first DIV or a synthetic seed.")
+    include_families: bool = True
+    include_intel: bool = True
+    include_audits: bool = True
+    fill_never_generated: bool = Field(
+        True,
+        description="After seeding, run the mutator × value-var cartesian self-check.",
+    )
+    max_hypotheses: int = Field(40, ge=1, le=200)
+    max_pairs: int = Field(200, ge=1, le=2000)
+
+
+class NeverGeneratedInput(ApexModel):
+    divergence_id: Optional[str] = Field(None, description="Optional DIV-* anchor.")
+    max_generate: int = Field(200, ge=1, le=2000)
 
 
 class ChainNode(ApexModel):

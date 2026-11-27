@@ -80,6 +80,8 @@ PHASE4 = _specs(
     phase4_specialists.assumption_inventory,
     phase4_specialists.run_battery,
     phase4_specialists.chain_hypotheses,
+    phase4_specialists.seed_from_research,
+    phase4_specialists.never_generated_check,
 )
 PHASE5 = _specs(
     phase5_sandbox.sandbox_forge,
@@ -131,6 +133,8 @@ ALIASES = {
     "assumptions": "assumption_inventory",
     "battery": "run_battery",
     "chain": "chain_hypotheses",
+    "seed": "seed_from_research",
+    "never_generated": "never_generated_check",
     "sandbox": "sandbox_forge",
     "test": "invariant_tester",
     "record": "record_experiment",
@@ -216,13 +220,16 @@ phase3_verify_tool = _group_tool(
 phase4_analyze_tool = _group_tool(
     "analyze",
     4,
-    "dimensional | reverse | state | trust | assumptions | battery | chain",
+    "dimensional | reverse | state | trust | assumptions | battery | chain | seed | never_generated",
     PHASE4,
     "Phase 4: choose the lens that matches the divergence. "
     "Use dimensional for arithmetic/decimals/rates/units; reverse for binaries/bytecode/minified code; "
     "state for init/async/callbacks/reentrancy/lifecycle; trust for auth/input/oracle/privilege paths; "
-    "assumptions to inventory silent beliefs; battery for vault/lifecycle/boundary triggers; "
-    "chain to join hypotheses into multi-step paths.",
+    "assumptions to inventory silent beliefs; battery for vault/lifecycle/boundary triggers "
+    "(empty vault checks load the default share-price families); "
+    "chain to join hypotheses into multi-step paths; "
+    "seed to turn intel/past-audits/families into hypotheses; "
+    "never_generated to fill mutator × value-var pairs that no hypothesis touches.",
 )
 phase5_experiment_tool = _group_tool(
     "experiment",

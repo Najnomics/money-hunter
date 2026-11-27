@@ -53,6 +53,7 @@ class PastFinding(ApexModel):
     line: Optional[int] = None
     dedupe_key: str
     acknowledged: bool = False
+    excerpt: str = ""
 
 
 class ReviewAuditsInput(ApexModel):
@@ -77,7 +78,10 @@ class IntelMatch(ApexModel):
 
 
 class CheckIntelInput(ApexModel):
-    keywords: list[str] = Field(..., min_length=1, description="Architecture / bug-class / framework keywords.")
+    keywords: list[str] = Field(
+        default_factory=list,
+        description="Architecture / bug-class / framework keywords. Empty = bundled protocol-family keywords.",
+    )
     corpus_path: Optional[str] = Field(None, description="bugbounty-intel root. Auto-detected when omitted.")
     max_results: int = Field(20, ge=1, le=200)
     kinds: list[str] = Field(default_factory=list, description="Restrict to posts/writeups/projects/techniques.")

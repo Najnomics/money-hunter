@@ -11,7 +11,7 @@ The default `core` toolset exposes **10 tools**. Each takes an `action` and a
 | `phase1_research` | docs, audits, intel, cves |
 | `phase2_model` | flows, invariants, vocab, sinks, skeleton, prediction |
 | `phase3_verify` | ast, sweep, prediction_diff, inventory |
-| `phase4_analyze` | dimensional, reverse, state, trust, assumptions, battery, chain |
+| `phase4_analyze` | dimensional, reverse, state, trust, assumptions, battery, chain, seed, never_generated |
 | `phase5_experiment` | sandbox, test, record |
 | `phase6_validate` | disprove, citations, classify, coverage, round_start, round_close |
 | `phase6_report` | draft, generate |
@@ -46,8 +46,8 @@ use the grouped tool name for MCP/CLI calls.
 | Tool | Input highlights | Writes |
 |---|---|---|
 | `ingest_docs` | `paths` | `docs` |
-| `review_past_audits` | `paths` | `audits` |
-| `check_intel` | `keywords`, `corpus_path`, `kinds` | `intel` |
+| `review_past_audits` | `paths` (markdown **and PDF**) | `audits` |
+| `check_intel` | `keywords` (empty = family terms), `corpus_path`, `kinds` | `intel` (always includes `data/intel-patterns/`) |
 | `cves_intel` | `packages[]`, `allow_network` | `cves` |
 
 ## Phase 2 — Model
@@ -72,7 +72,8 @@ use the grouped tool name for MCP/CLI calls.
 
 ## Phase 4 — Specialist Analysis
 
-Every tool requires a valid `divergence_id`.
+Most lenses require a valid `divergence_id`. `seed` / `never_generated` /
+empty `run_battery` will create a synthetic `DIV-SEED-*` if none exists.
 
 | Tool | Input highlights | Writes |
 |---|---|---|
@@ -81,8 +82,10 @@ Every tool requires a valid `divergence_id`.
 | `state_machine_breaker` | `divergence_id`, `target_states` | `state_machine` |
 | `trust_boundary_prober` | `divergence_id`, `boundaries` | `trust_boundary` |
 | `assumption_inventory` | `assumptions[]` with class, violator, primitive, cost | `assumptions` |
-| `run_battery` | `battery=vault/lifecycle/boundary`, `trigger`, `checks[]` | `batteries` |
+| `run_battery` | `battery=vault/lifecycle/boundary`, `trigger`, `checks[]`. Empty vault checks load the default share-price families and seed hypotheses. | `batteries` |
 | `chain_hypotheses` | `nodes[]` with pre/post facts, `chains[]` with edges and sink | `chains` |
+| `seed_from_research` | optional `divergence_id`; intel + past audits + families → hypotheses; default `fill_never_generated` | `research_seeds` (+ `gap_fill`) |
+| `never_generated_check` | optional `divergence_id`, `max_generate` | `gap_fill` |
 
 ## Phase 5 — Experiment
 
@@ -99,7 +102,7 @@ Every tool requires a valid `divergence_id`.
 | `disprove_finding` | `hypothesis_id`, `checks[]` | `disproofs` |
 | `verify_citations` | `phases`, `include_markdown` | `citations` |
 | `classify_finding` | `hypothesis_id`, `impact`, `trigger`, `reachability`, `human_approved` | `classifications` |
-| `coverage_check` | `max_gaps` | `coverage` |
+| `coverage_check` | `max_gaps`. Fails closed (ratio 0) if any critical flow is unmapped. | `coverage` |
 | `start_round` | `gaps[]`, `max_gaps` | `round` + `.apex/rounds/` |
 | `close_round` | `round`, `outcome`, counts, `remaining_gaps` | `round` + `.apex/rounds/` |
 | `close_session` | `status`, `resume_state`, `backlog[]` | `session` + death-note |

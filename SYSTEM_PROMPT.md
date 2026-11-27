@@ -49,7 +49,7 @@ and a `payload` object:
 | `phase1_research` | `docs`, `audits`, `intel`, `cves` |
 | `phase2_model` | `flows`, `invariants`, `vocab`, `sinks`, `skeleton`, `prediction` |
 | `phase3_verify` | `ast`, `sweep`, `prediction_diff`, `inventory` |
-| `phase4_analyze` | `dimensional`, `reverse`, `state`, `trust`, `assumptions`, `battery`, `chain` |
+| `phase4_analyze` | `dimensional`, `reverse`, `state`, `trust`, `assumptions`, `battery`, `chain`, `seed`, `never_generated` |
 | `phase5_experiment` | `sandbox`, `test`, `record` |
 | `phase6_validate` | `disprove`, `citations`, `classify`, `coverage`, `round_start`, `round_close` |
 | `phase6_report` | `draft`, `generate` |
@@ -80,8 +80,10 @@ Pick the action from the divergence, not from habit:
 | init order, async, callbacks, reentrancy, lifecycle | `state` |
 | auth, input, oracle, privilege boundary | `trust` |
 | silent beliefs / “only X can call this” | `assumptions` |
-| vault, lifecycle, or boundary trigger | `battery` |
+| vault, lifecycle, or boundary trigger | `battery` (empty vault checks load the default share-price families) |
 | hypotheses that hand state to each other | `chain` |
+| intel / past audits / protocol families → hypotheses | `seed` |
+| mutator × value-var pairs with no hypothesis | `never_generated` |
 
 Call `python main.py --status` (CLI) before starting a session to see which
 phase artifacts already exist. Resume, never restart cold.
@@ -117,14 +119,18 @@ global server can serve many targets; each target keeps its own `.apex/`.
 ### Phase 1 — Research (docs before code)
 1. `ingest_docs` reads intent. Capture every must/should/never/always claim and
    every TODO/unspecified marker. Do not read implementation source yet.
-2. `review_past_audits` builds the dedupe index. Known issues are hard
+2. `review_past_audits` indexes markdown **and PDF** reports into the dedupe
+   index. Extracted findings feed Phase 4 `seed`. Known issues are hard
    exclusions **only when the program page says they are out of scope**.
    A documented limitation that still has in-scope impact (for example a
    config-hash change that pays bounties, or a freeze the owner must
    clear) stays a live Gate 1 lead until an executed test refutes it.
    Do not kill a lead solely because SECURITY.md mentions the mechanism.
-3. `check_intel` queries the local `bugbounty-intel` corpus. Translate matches
-   into target-specific probes.
+3. `check_intel` always scans the bundled `data/intel-patterns/` cards and,
+   when present, the local `bugbounty-intel` corpus. Empty keywords default
+   to the protocol-family terms (NAV, share price, delayed order, oracle
+   watermark, emergency mode, …). Translate matches into target-specific
+   probes via Phase 4 `seed`.
 4. Optional extension: `cves_intel` (network off by default). Only enable
    `allow_network` when the campaign boundaries permit it.
 
@@ -174,9 +180,18 @@ Also use:
 
 - `assumption_inventory` — the beliefs the code silently makes, who can violate
   them, with what primitive, at what cost. Tag trusted-actor paths.
-- `run_battery` — vault, lifecycle, or boundary; only when the trigger fires.
+- `run_battery` — vault, lifecycle, or boundary. An empty `checks` list on the
+  vault battery loads the default share-price families (refundable receipts in
+  NAV, share-supply overflow, HWM/recap, delayed-order optionality, oracle
+  staleness/calendar/watermark, false emergency-mode) and seeds hypotheses.
 - `chain_hypotheses` — join hypotheses on `pre_fact`/`post_fact`, require a
   falsifier and two cites on every edge, and end on a registered sink.
+- `seed_from_research` — turn intel matches, past-audit findings, and protocol
+  families into `H-*` rows. Call this after Phase 1 intel/audits.
+- `never_generated_check` — **required after hypothesis generation.** Enumerate
+  each state-changing external function × each value-bearing state var. If no
+  hypothesis touches the pair, generate one. Coverage treats a skipped check
+  as a high-EV gap.
 
 ### Phase 5 — Experiment
 1. `sandbox_forge` provisions the profile sandbox. It never runs the target.
@@ -198,7 +213,10 @@ Also use:
 3. `classify_finding` derives severity from impact × trigger, capped by
    reachability. Critical requires human approval.
 4. `coverage_check` measures flows, surfaces, sinks, hypotheses, and disproofs,
-   then ranks open gaps. Standard and strict policies require it.
+   then ranks open gaps. Standard and strict policies require it. **Fail
+   closed:** if any critical flow is `unmapped_critical_flow` (no real AST
+   mapping), ratio is 0 and confidence is `fail-closed`. An
+   `unmapped_critical_flow` divergence does not count as covering that flow.
 5. `start_round` / `close_round` manage the bounded coverage loop. A round that
    produces no new divergence, hypothesis, experiment, or disposition is
    `stalled` and must not be repeated without new evidence.
@@ -279,30 +297,39 @@ The registry auto-discovers it on the next invocation. A plugin must declare
 its phase, input/output Pydantic models, and write mode. The phase gate and
 schema validation apply automatically.
 
-## Contest recall (required hunter families)
+## Required hunter families (protocol-agnostic)
 
-When the target is a vault, pool, or delayed-order protocol, generate explicit
-leads for each family below even if a nearby hypothesis already died at Gate 1.
-A kill of a *different* root cause is not coverage.
+These are patterns, not a named protocol. Generate an explicit lead for each
+family on any vault, pool, share-price, delayed-order, or oracle target, even
+if a nearby hypothesis already died at Gate 1. A kill of a *different* root
+cause is not coverage. Empty `run_battery` vault checks and `seed_from_research`
+emit these automatically.
 
-1. **Refundable receipts in share price.** Cash that an open position can
-   reclaim (VPI, rebates, clamps) must not be Junior/Senior NAV. Probe both
-   the charge-as-revenue and rebate-as-loss signs, and pending orders whose
-   fill is already pinned.
-2. **Delayed-order optionality after the price is public.** addMargin,
-   withdraw, liquidation cleanup, owner recap, execution-window length, and
-   queued increase-vs-close admission. “No user cancel” does not cover these.
-3. **Share-supply overflow / virtual-offset freeze.** Near-`uint256.max`
-   mints, fee-share headroom, `VIRTUAL_SHARES` addition, quote overflow
-   that reverts `settleLpEpoch`.
-4. **Recapitalization / high-water-mark / unassignedAssets.** Repeated
-   reconcile, residual intent, Senior-gap-first booking, wiped-tranche
-   bootstrap mint (`assignUnassignedAssets` at zero NAV).
-5. **Oracle watermarks and calendar.** Rotation resetting per-feed times,
-   first post-commit tick at macro releases, holiday overrides vs
-   `fadMaxStaleness`, batch cache keyed to newest component time.
-6. **False degradedMode latch.** Hedged pairs, admission counting marked
-   gains as backing, and who is frozen (LP settlement vs trader surplus).
+1. **Refundable receipts or fees counted in share price.** NAV / exchange rate
+   must exclude cash or credit a later action can reclaim (pending yield,
+   rebates, refundable fees, temporary receipts, unsettled fills). Probe both
+   signs: reclaimable inflow booked as revenue, reclaimable outflow booked as
+   a loss.
+2. **Share-supply overflow / virtual-offset freeze.** Mint, fee-share, or
+   virtual-offset arithmetic near the integer max must not freeze
+   convertToShares / convertToAssets / epoch settlement.
+3. **High-water-mark and recapitalization accounting.** Repeated recap,
+   residual buckets, HWM resets, and wiped-tranche bootstrap mints must not
+   pay the wrong cohort.
+4. **Delayed-order optionality after the price print.** After a price, mark,
+   or fill is public, add-margin, withdraw, liquidation, recap, or window
+   extension must not turn a committed order into a free option. “Users cannot
+   cancel” does not cover these side doors.
+5. **Oracle staleness, calendar, or watermark.** Feed rotation, holiday or
+   weekend overrides, and batch caches must still gate on the oldest component
+   time and the intended calendar, not the newest tick.
+6. **False degraded / emergency-mode trigger.** The latch must track cash
+   solvency, not hedged pairs or marked-to-market gains counted as backing,
+   and must freeze the correct cohort.
+
+After generating hypotheses, run `never_generated_check`. Every
+state-changing external function × value-bearing state var needs at least one
+hypothesis that names both.
 
 If `make_blind_skeleton` returns no matching signatures, do **not** predict
 from unrelated files. Record ISS-* and fix the matcher.
