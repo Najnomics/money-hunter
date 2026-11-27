@@ -38,6 +38,10 @@ Slices of 3–5 unique tests; this file is appended after each slice.
 | `assignUnassignedAssets_unassignedAssets` | `assign_outstanding` | 98209 | PASS | FAIL NoUnassignedAssets | HOLD |
 | `commitOrder_executionWindow` | `min_window` | 99136 | PASS | FAIL InvalidExecutionWindow | HOLD |
 | `commitOrder_freeSettlement` | `pending_order` | 99392, 99280 | PASS | FAIL SettlementFloorOrderPending | HOLD |
+| `commitOrder_minPublishTime` | `first_tick` | 97906 | PASS | FAIL OrderNotQueueHead | HOLD |
+| `commitOrder_traderClaimBalance` | `pending_order` | 99551 | PASS | FAIL SettlementFloorOrderPending | HOLD |
+| `convertToShares_totalSupply` | `overflow_headroom` | 97628 | PASS | FAIL conversion not frozen | HOLD |
+| `evaluateOpen_acceptedBasket` | `first_tick` | 98762 | PASS | FAIL mark | HOLD |
 
 ## Slice log
 
@@ -54,3 +58,7 @@ Slices run oldest-name first. HOLD = pin PASS + matching overlay FAIL. DEMOTED =
 ### Slice 3 (unique 9–12)
 
 4/4 HOLD. Cumulative HOLD unique 12/43.
+
+### Slice 4 (unique 13–16)
+
+4/4 HOLD. Cumulative HOLD unique 16/43.
