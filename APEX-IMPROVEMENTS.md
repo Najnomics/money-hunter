@@ -124,6 +124,7 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 - `tests/test_never_generated.py` — cartesian fill, getters skipped, already-covered pairs skipped, `_` internals and constants dropped
 - `tests/test_recall_gates.py` — freeze-is-impact G4, distinguishing vs happy-path/code-fact G3, per-variant family kills, public cartesian G3 queue, ABI-over-internal ranking, excerpt→in-scope mapping before wrong-protocol kill
 - `tests/test_plether_recall.py` — one regression per Blind2 miss (6 wrongly killed crits, highs 97628/97590, every other killed M/L, all 42 pair-only, never-generated 99136)
+- `tests/test_g3_execute.py` — forge execute=true confirms overflow freeze and 99136 window attack; Gate 4 verifies
 - `tests/plether_misses.py` — catalog of the 63 drops (gate, locus, family, kill text)
 
 ## Top 15 (summary)
@@ -170,3 +171,9 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 **Cause.** Blind3 auto-queued `_applyLiquidationSettlementPlan`, `_settleProtocolFeeTopUp`, and `settlementApply*` because those names match high-EV stems (`apply`/`settle`) and pair templates. `commitOrder × executionWindow` (99136) was generated but missed the top-N.
 
 **Fix (this branch).** `pair_rank` adds `PUBLIC_ENTRY_BONUS` for non-helper ABI names and `INTERNAL_HELPER_PENALTY` for `_foo` and camelCase `settlementApply*` helpers. High-EV internals stay enumerable. Regression: `test_commit_order_execution_window_in_top_n_among_settlement_internals`.
+
+## 20. Gate 3 execute=true runs local forge distinguishing attacks
+
+**Cause.** Blind3 queued 96 prepared Python scaffolds (`execute=false`) and recorded 0 verified. `queue_cartesian_g3` refused to execute. Recall stayed at 0.
+
+**Fix (this branch).** `execute_queued_g3` (`experiment execute_g3`) requires `execute=true` and runs family Foundry attacks under `harness/g3` with local forge. A passing distinguishing attack is `verdict=confirmed` and Gate 4 can verify. Failures are `inconclusive`, not kills. Never submit. Tests: `tests/test_g3_execute.py`.

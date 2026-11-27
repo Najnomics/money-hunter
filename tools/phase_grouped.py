@@ -88,6 +88,7 @@ PHASE5 = _specs(
     phase5_sandbox.invariant_tester,
     phase5_sandbox.record_experiment,
     phase5_sandbox.queue_cartesian_g3,
+    phase5_sandbox.execute_queued_g3,
 )
 PHASE6_VALIDATE = _specs(
     phase6_validate.disprove_finding,
@@ -141,6 +142,8 @@ ALIASES = {
     "record": "record_experiment",
     "cartesian": "queue_cartesian_g3",
     "queue_g3": "queue_cartesian_g3",
+    "execute_g3": "execute_queued_g3",
+    "execute": "execute_queued_g3",
     "disprove": "disprove_finding",
     "citations": "verify_citations",
     "classify": "classify_finding",
@@ -237,10 +240,11 @@ phase4_analyze_tool = _group_tool(
 phase5_experiment_tool = _group_tool(
     "experiment",
     5,
-    "sandbox | test | record | cartesian",
+    "sandbox | test | record | cartesian | execute_g3",
     PHASE5,
     "Phase 5: sandbox, distinguishing invariant test, recorded experiment, "
-    "cartesian queue of top public mutator × value-sink G3 tests.",
+    "cartesian queue of top public mutator × value-sink G3 tests, "
+    "execute_g3 to run those tests with local forge (never submit).",
 )
 phase6_validate_tool = _group_tool(
     "validate",

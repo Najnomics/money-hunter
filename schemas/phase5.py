@@ -78,3 +78,17 @@ class CartesianQueueInput(ApexModel):
         False,
         description="Queue never executes. Distinguishing attacks are recorded separately.",
     )
+
+
+class ExecuteQueuedInput(ApexModel):
+    execute: bool = Field(True, description="Must be true. Runs forge on queued distinguishing tests.")
+    command: Optional[str] = Field(
+        None,
+        description="Override forge command. Default: forge test --root harness/g3 --match-contract <family>.",
+    )
+    timeout_seconds: int = Field(120, ge=5, le=3600)
+    max_run: int = Field(96, ge=1, le=200, description="Cap how many prepared G3 rows to execute.")
+    include_named_open: bool = Field(
+        True,
+        description="Also execute a distinguishing forge test for each NAMED_OPEN catalog row.",
+    )

@@ -14,6 +14,7 @@ from fsutil import rel_to, run_command, write_text_atomic
 from runtime import ToolContext, ToolSpec, ToolError, tool
 from schemas.phase5 import (
     CartesianQueueInput,
+    ExecuteQueuedInput,
     Experiment,
     ExperimentBatch,
     InvariantTestInput,
@@ -276,4 +277,138 @@ def queue_cartesian_g3(ctx: ToolContext, inp: CartesianQueueInput) -> Experiment
     return ExperimentBatch(items=items, notes=notes)
 
 
-TOOLS: list[ToolSpec] = [sandbox_forge, invariant_tester, record_experiment, queue_cartesian_g3]  # type: ignore[list-item]
+def _pair_from_experiment(exp: dict, hyp: dict | None) -> tuple[str, str, str]:
+    from tools.g3_harness import parse_pair
+
+    blob = " ".join(
+        [
+            str(exp.get("observation") or ""),
+            str((hyp or {}).get("variant") or ""),
+            str((hyp or {}).get("title") or ""),
+            str((hyp or {}).get("statement") or ""),
+        ]
+    )
+    fn, var = parse_pair(blob)
+    if not fn and "::" in str((hyp or {}).get("variant") or ""):
+        fn, var = str(hyp.get("variant")).split("::", 1)
+    family = str((hyp or {}).get("family") or "")
+    return fn, var, family
+
+
+@tool(
+    name="execute_queued_g3",
+    phase=5,
+    section="experiments",
+    summary="Execute prepared distinguishing G3 tests with forge (local). Never submits.",
+    input_model=ExecuteQueuedInput,
+    output_model=ExperimentBatch,
+    write_mode="append",
+    tags=("experiment", "execute"),
+)
+def execute_queued_g3(ctx: ToolContext, inp: ExecuteQueuedInput) -> ExperimentBatch:
+    if not inp.execute:
+        raise ToolError("execute_queued_g3 requires execute=true. Prepared tests are not evidence.")
+    from tools.g3_harness import run_distinguishing
+
+    hyps = {str(h.get("id")): h for h in ctx.state.hypotheses() if h.get("id")}
+    queued = [
+        e
+        for e in ctx.state.experiments()
+        if str(e.get("kind") or "").startswith("distinguishing")
+        and e.get("status") in {"prepared", "pending"}
+    ]
+    jobs: list[tuple[str, str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for exp in queued[: inp.max_run]:
+        hyp = hyps.get(str(exp.get("hypothesis_id") or ""))
+        fn, var, family = _pair_from_experiment(exp, hyp)
+        hid = str(exp.get("hypothesis_id") or "")
+        key = (hid, fn, var)
+        if key in seen:
+            continue
+        seen.add(key)
+        jobs.append((hid, family, fn, var))
+
+    if inp.include_named_open:
+        for hyp in hyps.values():
+            hid = str(hyp.get("id") or "")
+            family = str(hyp.get("family") or "")
+            variant = str(hyp.get("variant") or "")
+            fn, var = ("", "")
+            if "::" in variant:
+                fn, var = variant.split("::", 1)
+            else:
+                fn, var = _pair_from_experiment({}, hyp)[:2]
+            if not family and not (fn and var):
+                continue
+            key = (hid, fn, var)
+            if key in seen:
+                continue
+            seen.add(key)
+            jobs.append((hid, family, fn, var))
+
+    jobs = jobs[: inp.max_run]
+    reserved: set[str] = set(existing_ids(ctx, 5))
+    items: list[Experiment] = []
+    notes: list[str] = ["Never submit. forge evidence is local-only."]
+    for hid, family, fn, var in jobs:
+        if hid not in hyps:
+            notes.append(f"skip {fn}::{var}: hypothesis {hid} missing")
+            continue
+        if inp.command:
+            args = shlex.split(inp.command)
+            result_cmd = run_command(args, cwd=ctx.workspace, timeout_seconds=inp.timeout_seconds)
+            result = {
+                "ok": result_cmd.returncode == 0 and not result_cmd.timed_out,
+                "returncode": result_cmd.returncode,
+                "stdout": result_cmd.stdout,
+                "stderr": result_cmd.stderr,
+                "command": inp.command,
+                "contract": "",
+                "timed_out": result_cmd.timed_out,
+            }
+        else:
+            result = run_distinguishing(
+                family=family, function=fn, var=var, timeout_seconds=inp.timeout_seconds
+            )
+        experiment_id = next_id(reserved, "E")
+        reserved.add(experiment_id)
+        directory = ctx.state.apex_dir / "experiments" / f"run-{experiment_id.lower()}"
+        directory.mkdir(parents=True, exist_ok=True)
+        stdout_file = directory / "stdout.log"
+        write_text_atomic(stdout_file, result.get("stdout") or "")
+        write_text_atomic(directory / "stderr.log", result.get("stderr") or "")
+        observation = (
+            f"attacker forge {result.get('contract') or ''} {fn}::{var} "
+            f"exit={result.get('returncode')} "
+            + ("PASS distinguishing" if result.get("ok") else "FAIL/inconclusive")
+        )
+        verdict = "confirmed" if result.get("ok") else "inconclusive"
+        if hid not in hyps:
+            notes.append(f"no hypothesis id for {fn}::{var}; recorded against {hid}")
+        items.append(
+            Experiment(
+                id=experiment_id,
+                hypothesis_id=hid if hid in hyps else (hid or "H-0001"),
+                kind="distinguishing_g3",
+                status="ran",
+                command=str(result.get("command") or ""),
+                artifact=rel_to(stdout_file, ctx.workspace),
+                stdout_path=rel_to(stdout_file, ctx.workspace),
+                returncode=int(result.get("returncode") or 0),
+                observation=observation,
+                verdict=verdict,
+                experiment_class="distinguishing",
+            )
+        )
+    notes.append(f"Executed {len(items)} distinguishing forge test(s). confirmed={sum(1 for i in items if i.verdict=='confirmed')}.")
+    return ExperimentBatch(items=items, notes=notes)
+
+
+TOOLS: list[ToolSpec] = [  # type: ignore[list-item]
+    sandbox_forge,
+    invariant_tester,
+    record_experiment,
+    queue_cartesian_g3,
+    execute_queued_g3,
+]

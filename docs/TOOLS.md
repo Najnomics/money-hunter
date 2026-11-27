@@ -95,6 +95,7 @@ empty `run_battery` will create a synthetic `DIV-SEED-*` if none exists.
 | `invariant_tester` | `hypothesis_id`, `test_code`, `execute`, `command`, `experiment_class` (default distinguishing) | `experiments` |
 | `record_experiment` | `hypothesis_id`, `verdict`, `output_path`, `experiment_class`. confirmed/refuted require a distinguishing attack, not a happy-path or code-fact check. | `experiments` |
 | `queue_cartesian_g3` | `max_queue` (default 32). Writes prepared distinguishing tests for the top ranked public mutator × value-sink pairs. Never executes. | `experiments` |
+| `execute_queued_g3` | `execute=true` (required), `max_run` (default 96), `include_named_open`. Runs local `forge test` on `harness/g3` family attacks. Pass → `confirmed`; fail → `inconclusive`. Never submits. | `experiments` |
 
 ## Phase 6 — Validate & Report
 

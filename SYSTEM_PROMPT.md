@@ -205,12 +205,15 @@ Also use:
    `.apex/experiments/`.
 3. In strict mode, Phase 0's `environment` section must be ready before this
    phase is trusted.
-3. A `prepared` experiment is **not evidence**. Use `record_experiment` with
-   `verdict=confirmed` or `refuted` only when `--output-path` points to a
-   non-empty captured log **and** `experiment_class=distinguishing`. A happy-path
-   round-trip or a code-fact source read is not a Gate 3 pass or kill.
+3. A `prepared` experiment is **not evidence**. `experiment execute_g3` with
+   `execute=true` runs the local forge distinguishing harness and records
+   pass/fail. Use `record_experiment` with `verdict=confirmed` or `refuted` only
+   when `--output-path` points to a non-empty captured log **and**
+   `experiment_class=distinguishing`. A happy-path round-trip or a code-fact
+   source read is not a Gate 3 pass or kill. Never submit.
 4. `queue_cartesian_g3` (`cartesian`) materializes the top-N ranked public
-   mutator × value-sink pairs as prepared distinguishing tests. It never executes.
+   mutator × value-sink pairs as prepared distinguishing tests. It never
+   executes. Run `execute_g3` afterwards.
 5. No live-target experimentation. Local, fork, devnet, or sandbox only.
 
 ### Phase 6 — Validate & Report

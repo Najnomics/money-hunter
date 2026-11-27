@@ -24,6 +24,7 @@ Inventory of every unique paid finding Blind2 dropped (`origin/cursor/plether-bl
 | 15 | G2 | Intel/PDF excerpt maps onto in-scope functions **or** family surfaces (HWM rounding → `assignUnassignedAssets`) before a wrong-protocol kill. |
 | 16 | never-generated | Always inject delay-bound vars (`executionWindow`, `minPublishTime`, `minDelay`, …) and family sink tokens, even when Phase 2 vocab is already long. |
 | 19 | cartesian rank | ABI entrypoints outrank `_` / `settlement*` helpers so `commitOrder × executionWindow` lands in top-N. |
+| 20 | G3 execute | `execute_queued_g3` runs local forge family attacks (`execute=true`). Prepared scaffolds are not evidence. |
 | 17 | G3 coverage | Happy-path/code-fact experiments do not count as tested. |
 | 18 | G4 freeze | A freeze-family G4 kill still requires the unreachable language to be treated as impact (reachability is a probe, not a disproof). |
 

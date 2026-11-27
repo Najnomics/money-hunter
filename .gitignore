@@ -12,4 +12,6 @@ intel/
 .env
 *.log
 dist/
+harness/g3/out/
+harness/g3/cache/
 
