@@ -57,7 +57,7 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
         if "price_print_then_mutate" in strategies:
             return (
                 "        OrderV3Types.ExecutionResult memory execResult = "
-                "router.executeOrder(lastCommitId, _mockPythUpdateData(1.5e8));\n"
+                "router.executeOrder(router.nextExecuteId(), _mockPythUpdateData(1.5e8));\n"
                 "        require(\n"
                 "            uint8(execResult.status) == uint8(OrderV3Types.LifecycleStatus.Executed),\n"
                 '            "pending execute after print failed"\n'

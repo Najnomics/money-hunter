@@ -91,6 +91,13 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertLess(src.index("_thinPool"), src.index("_openFilled"))
         self.assertLess(src.index("_openFilled"), src.index("_thinPoolTo"))
 
+    def test_execute_order_freesettlement_commits_then_prints(self):
+        src = setup_block("executeOrder", "freeSettlement", "delayed-order-optionality")
+        self.assertIn("_openFilled", src)
+        self.assertIn("_commitAs", src)
+        self.assertIn("_publish(1.5e8)", src)
+        self.assertLess(src.index("_commitAs"), src.index("_publish"))
+
     def test_execute_open_degraded_opens_into_thin_cash_not_a_second_long(self):
         chosen = select_strategies("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("thin_pool", chosen)

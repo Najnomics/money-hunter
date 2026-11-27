@@ -50,9 +50,10 @@ class G3PocGeneratorTests(unittest.TestCase):
 
     def test_execute_order_freesettlement_executes_the_pending_head(self):
         src = render_test("executeOrder", "freeSettlement", "delayed-order-optionality")
-        self.assertIn("lastCommitId = _commitAs", src)
-        self.assertIn("executeOrder(lastCommitId", src)
+        self.assertIn("_commitAs", src)
+        self.assertIn("executeOrder(router.nextExecuteId()", src)
         self.assertIn("LifecycleStatus.Executed", src)
+        self.assertNotIn("executeOrder(lastCommitId", src)
         self.assertNotIn('_openReq("x"', src)
 
     def test_addmargin_emits_free_snapshot_and_price_print(self):
