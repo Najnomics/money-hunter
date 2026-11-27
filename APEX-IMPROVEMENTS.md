@@ -177,3 +177,9 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 **Cause.** Blind3 queued 96 prepared Python scaffolds (`execute=false`) and recorded 0 verified. `queue_cartesian_g3` refused to execute. Recall stayed at 0.
 
 **Fix (this branch).** `execute_queued_g3` (`experiment execute_g3`) requires `execute=true` and runs **exact** `test_attack_<fn>_<var>` Foundry tests against the real Plether pin (`harness/g3_plether`, `OrderRouter` / `TrancheVault` / `HousePool`). No family-contract fallback. Missing tests are `inconclusive`. A PASS on the buggy pin that FAILs on a local patch is the only verified evidence. Never submit. Tests: `tests/test_g3_execute.py`, `tests/test_g3_falsify.py`.
+
+## 21. Generic G3 sequences, not per-finding hand PoCs
+
+**Cause.** Hand tests for 97591/98209/98854/97590 failed on the buggy pin: no matured LP epoch, `accountExcess` instead of an unowned residual, total balance instead of free-vs-locked, single-actor close at the seed price.
+
+**Fix (this branch).** `tools/g3_sequence.py` selects protocol-agnostic setup strategies from `(fn, var, family)` (epoch advance, receipt-open, unowned residual, locked-vs-free, price-print-then-mutate, multi-actor hedge, oracle move, warp-past-window, first tick, supply headroom). `tools/g3_poc_generator.py` emits exact `test_attack_<fn>_<var>` Solidity. No finding ids in the generator. Tests: `tests/test_g3_sequence.py`, `tests/test_g3_poc_generator.py`.
