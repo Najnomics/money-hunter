@@ -42,19 +42,19 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
     if fn == "commitOrder":
         if "warp_past_window" in strategies:
             return (
-                "        uint64 oid = _commitAs(ATTACKER, _openReq('w', _long(), 2));\n"
+                '        uint64 oid = _commitAs(ATTACKER, _openReq("w", _long(), 2));\n'
                 "        vm.warp(uint256(book.orderTiming(oid).executionDeadline) + 1);\n"
                 "        router.expireOrder(oid);"
             )
         if "oracle_first_tick" in strategies:
             return (
-                "        uint64 oid = _commitAs(ATTACKER, _openReq('t', _long(), 60));\n"
+                '        uint64 oid = _commitAs(ATTACKER, _openReq("t", _long(), 60));\n'
                 "        router.executeOrder(oid, _mockPythUpdateData(1e8));"
             )
-        return "        _commitAs(ATTACKER, _openReq('c', _long(), 60));"
+        return '        _commitAs(ATTACKER, _openReq("c", _long(), 60));'
     if fn in {"executeOrder", "executeOpen"}:
         return (
-            "        uint64 oid = _commitAs(ATTACKER, _openReq('x', _long(), 60));\n"
+            '        uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));\n'
             "        router.executeOrder(oid, _mockPythUpdateData(1e8));"
         )
     if fn == "executeClose":
@@ -93,9 +93,9 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
     if fn == "applyCalendarConfig":
         return "        // calendar mutator — oracle helpers already ran\n        _publish(1.5e8);"
     if fn == "settleTraderClaim":
-        return "        try engine.settleTraderClaim(ATTACKER) {} catch {}"
+        return "        vm.prank(ATTACKER);\n        try engine.settleTraderClaim(ATTACKER) {} catch {}"
     if fn in {"assessCommittedOrder", "evaluateOpen"}:
-        return "        _commitAs(ATTACKER, _openReq('a', _long(), 60));"
+        return '        _commitAs(ATTACKER, _openReq("a", _long(), 60));'
     return f"        // generic mutator `{fn}` — helpers already ran\n        _settleLpEpochForTest();"
 
 
@@ -120,18 +120,18 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
         )
     if var in {"freeSettlement", "freeBalance"}:
         return (
-            '        require(_freeOf(ATTACKER) <= snapshotFree, "free settlement did not drop");'
+            '        require(_freeOf(ATTACKER) < snapshotFree, "free settlement did not drop");'
         )
     if var == "degradedMode":
         return '        require(engine.degradedMode(), "split close did not latch degradedMode");'
     if var in {"executionWindow", "executionWindowSeconds"}:
         return (
-            "        uint64 oid = _commitAs(ATTACKER, _openReq('w2', _long(), 2));\n"
+            '        uint64 oid = _commitAs(ATTACKER, _openReq("w2", _long(), 2));\n'
             '        require(book.orderTiming(oid).executionWindowSeconds == 2, "2s window rejected");'
         )
     if var == "minPublishTime":
         return (
-            "        uint64 oid = _commitAs(ATTACKER, _openReq('tick', _long(), 60));\n"
+            '        uint64 oid = _commitAs(ATTACKER, _openReq("tick", _long(), 60));\n'
             "        OrderV3Types.ExecutionResult memory result = "
             "router.executeOrder(oid, _mockPythUpdateData(1e8));\n"
             '        require(uint8(result.status) == uint8(OrderV3Types.LifecycleStatus.Executed), "first tick failed");'

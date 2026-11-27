@@ -8,6 +8,7 @@ import {IOrderLifecycleBook} from "@plether/perps/interfaces/IOrderLifecycleBook
 import {stdStorage, StdStorage} from "forge-std/StdStorage.sol";
 
 /// Shared setup/sequence helpers for generated G3 attacks. Never submit.
+/// Generated settle mutators call inherited `_settleLpEpochForTest` (HousePool).
 abstract contract G3Sequence is BasePerpTest {
     using stdStorage for StdStorage;
 

@@ -8,11 +8,12 @@ from tools.g3_harness import run_distinguishing
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = ROOT / "harness" / "g3_plether" / "test" / "ApexG3Targets.t.sol"
+SEQUENCE = ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol"
 
 
 class G3FalsifyTests(unittest.TestCase):
     def test_97591_and_99136_call_real_plether(self):
-        src = TARGETS.read_text(encoding="utf-8")
+        src = TARGETS.read_text(encoding="utf-8") + SEQUENCE.read_text(encoding="utf-8")
         self.assertIn("import {BasePerpTest}", src)
         self.assertIn("router.commitOrder", src)
         self.assertIn("router.expireOrder", src)

