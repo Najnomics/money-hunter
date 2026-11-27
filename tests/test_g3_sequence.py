@@ -70,6 +70,12 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertNotIn("multi_actor_hedge", chosen)
         self.assertNotIn("oracle_price_move", chosen)
 
+    def test_sequence_helper_can_snapshot_rebate_reserve(self):
+        src = (ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol").read_text(encoding="utf-8")
+        self.assertIn("vpiRebateReserveAssets", src)
+        self.assertIn("_snapshotRebate", src)
+        self.assertNotIn("97591", src)
+
     def test_close_helper_uses_live_mark_not_hardcoded_shock(self):
         src = (ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol").read_text(encoding="utf-8")
         close = src.split("function _closeFilled", 1)[1].split("function ", 1)[0]

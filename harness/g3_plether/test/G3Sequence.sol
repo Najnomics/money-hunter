@@ -19,6 +19,7 @@ abstract contract G3Sequence is BasePerpTest {
     uint256 internal snapshotFree;
     uint256 internal snapshotNav;
     uint256 internal snapshotVictim;
+    uint256 internal snapshotRebate;
     uint256 internal lastDepositRequest;
     uint256 internal openNonce;
 
@@ -131,6 +132,14 @@ abstract contract G3Sequence is BasePerpTest {
     function _snapshotNav() internal {
         snapshotNav = juniorVault.totalAssets();
         snapshotVictim = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
+    }
+
+    function _rebateOf(address who) internal view returns (uint256) {
+        return clearinghouse.vpiRebateReserveAssets(who);
+    }
+
+    function _snapshotRebate(address who) internal {
+        snapshotRebate = _rebateOf(who);
     }
 
     function _seedUnownedResidual(uint256 amount) internal {
