@@ -244,10 +244,10 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_executeOpen_degradedMode() public {
         // strategy:thin_pool — A 1M junior buffer is far above one-side maxProfit, so a hedge close cannot trip effectiveAssets < maxLiability. Thin cash first.
         _thinPool();
-        // strategy:multi_actor_hedge — A false emergency latch needs two actors on opposite sides, not a single solvent close.
-        _openFilled(ATTACKER, _long(), 60); _openFilled(VICTIM, _short(), 60);
         // strategy:oracle_price_move — Close/execute after a material mark move, not at the seed price.
         _publish(1.5e8);
+        // strategy:drain_cash — After the hedge is open, drain pool cash well below one-side maxProfit. A close that credits the pool still leaves cash < remaining maxLiability.
+        _thinPoolTo(10_000e6);
         uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
         OrderV3Types.ExecutionResult memory execResult = router.executeOrder(oid, _mockPythUpdateData(1e8));
         require(

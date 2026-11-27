@@ -116,7 +116,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="multi_actor_hedge",
-        when_fn=_re(r"executeClose|executeOpen|executeOrder"),
+        when_fn=_re(r"executeClose"),
         when_var=_re(r"degradedMode|emergency|frozen"),
         when_family=frozenset({"false-emergency-mode"}),
         setup="_openFilled(ATTACKER, _long(), 60); _openFilled(VICTIM, _short(), 60);",
@@ -135,7 +135,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="drain_cash",
-        when_fn=_re(r"executeClose|executeOrder"),
+        when_fn=_re(r"executeClose|executeOrder|executeOpen"),
         when_var=_re(r"degradedMode|emergency"),
         when_family=frozenset({"false-emergency-mode"}),
         setup="_thinPoolTo(10_000e6);",
