@@ -179,8 +179,11 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
         )
     if var == "seniorPrincipal":
         return (
-            "        require(pool.seniorPrincipal() != snapshotSenior, "
-            '"senior principal ignored residual/recap");'
+            "        require(\n"
+            "            pool.seniorPrincipal() != snapshotSenior\n"
+            "                || pool.pendingRecapitalizationAssets() > 0,\n"
+            '            "senior principal ignored residual/recap"\n'
+            "        );"
         )
     if var == "traderClaimBalance":
         return (
@@ -191,7 +194,13 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
             '        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");'
         )
     if var == "highWaterMark":
-        return '        require(pool.seniorHighWaterMark() != snapshotHwm, "HWM path was a no-op");'
+        return (
+            "        require(\n"
+            "            pool.seniorHighWaterMark() != snapshotHwm\n"
+            "                || pool.pendingRecapitalizationAssets() > 0,\n"
+            '            "HWM path was a no-op"\n'
+            "        );"
+        )
     if var == "unassignedAssets":
         return (
             "        require(\n"

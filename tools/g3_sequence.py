@@ -179,6 +179,17 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
+        id="drain_after_hedge",
+        when_fn=_re(r"executeOpen"),
+        when_var=_re(r"degradedMode|emergency"),
+        when_family=frozenset({"false-emergency-mode"}),
+        setup="_thinPoolTo(25_000e6);",
+        why=(
+            "After the counterparty fill, drain remaining cash so admission spends "
+            "backing already owed to the winner."
+        ),
+    ),
+    SequenceStrategy(
         id="legal_mark_search",
         when_fn=_re(r"executeOpen"),
         when_var=_re(r"degradedMode|emergency"),

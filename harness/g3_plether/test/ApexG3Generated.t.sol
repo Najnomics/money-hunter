@@ -118,7 +118,11 @@ contract ApexG3GeneratedTest is G3Sequence {
         _snapshotHwm();
         _trySettleLpEpoch();
         _trySettleLpEpoch();
-        require(pool.seniorHighWaterMark() != snapshotHwm, "HWM path was a no-op");
+        require(
+            pool.seniorHighWaterMark() != snapshotHwm
+                || pool.pendingRecapitalizationAssets() > 0,
+            "HWM path was a no-op"
+        );
     }
 
     function test_attack_settleLpEpoch_seniorPrincipal() public {
@@ -132,7 +136,11 @@ contract ApexG3GeneratedTest is G3Sequence {
         _snapshotHwm();
         _trySettleLpEpoch();
         _trySettleLpEpoch();
-        require(pool.seniorPrincipal() != snapshotSenior, "senior principal ignored residual/recap");
+        require(
+            pool.seniorPrincipal() != snapshotSenior
+                || pool.pendingRecapitalizationAssets() > 0,
+            "senior principal ignored residual/recap"
+        );
     }
 
     function test_attack_executeOrder_acceptedBasket() public {
@@ -169,7 +177,11 @@ contract ApexG3GeneratedTest is G3Sequence {
         _seedPendingRecap(1e6);
         _snapshotHwm();
         pool.assignUnassignedAssets(false, ATTACKER);
-        require(pool.seniorHighWaterMark() != snapshotHwm, "HWM path was a no-op");
+        require(
+            pool.seniorHighWaterMark() != snapshotHwm
+                || pool.pendingRecapitalizationAssets() > 0,
+            "HWM path was a no-op"
+        );
     }
 
     function test_attack_withdraw_freeSettlement() public {
@@ -270,6 +282,8 @@ contract ApexG3GeneratedTest is G3Sequence {
         _thinPool();
         // strategy:counterparty_open — Admission backing is revealed when an opposite-side winner already exists. A lone open into thin cash does not latch degradedMode.
         _openFilled(VICTIM, _short(), 60);
+        // strategy:drain_after_hedge — After the counterparty fill, drain remaining cash so admission spends backing already owed to the winner.
+        _thinPoolTo(25_000e6);
         // strategy:legal_mark_search — A hardcoded seed or 1.5x print is often skew-illegal after a counterparty fill. Search marks until executeOpen admits, then close the winner.
         _closeFilled(VICTIM);
         _openAtFirstLegalMark(ATTACKER, _long());

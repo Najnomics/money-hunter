@@ -94,6 +94,7 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_seedPendingRecap", src)
         self.assertIn("_snapshotHwm", src)
         self.assertIn("seniorHighWaterMark() != snapshotHwm", src)
+        self.assertIn("pendingRecapitalizationAssets() > 0", src)
         self.assertGreaterEqual(src.count("_trySettleLpEpoch()"), 2)
         self.assertGreaterEqual(src.count("_warpToDepositEpoch"), 2)
         self.assertLess(src.index("_snapshotHwm"), src.index("_trySettleLpEpoch"))
@@ -105,6 +106,7 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_openFilled(VICTIM, _short()", src)
         self.assertIn("_closeFilled(VICTIM)", src)
         self.assertIn("_thinPool()", src)
+        self.assertIn("_thinPoolTo(25_000e6)", src)
         self.assertIn("_openAtFirstLegalMark", src)
         self.assertLess(src.index("_closeFilled(VICTIM)"), src.index("_openAtFirstLegalMark"))
 
