@@ -19,7 +19,9 @@ class SequenceSelectionTests(unittest.TestCase):
         src = setup_block("settleLpEpoch", "sharePrice", "refundable-receipt-in-nav")
         self.assertIn("_queueDeposit", src)
         self.assertIn("_warpToDepositEpoch", src)
+        self.assertIn("_snapshotNav", src)
         self.assertIn("_openFilled", src)
+        self.assertLess(src.index("_warpToDepositEpoch"), src.index("_snapshotNav"))
 
     def test_assign_unassigned_needs_unowned_residual_not_account_excess(self):
         # Root cause: mint-to-pool + accountExcess left unassigned=0.
@@ -37,16 +39,20 @@ class SequenceSelectionTests(unittest.TestCase):
         src = setup_block("addMargin", "freeSettlement", "delayed-order-optionality")
         self.assertIn("_snapshotFree", src)
         self.assertIn("_publish", src)
+        self.assertLess(src.index("_publish"), src.index("_snapshotFree"))
 
     def test_execute_close_degraded_needs_two_actors_and_price_move(self):
         # Root cause: single-leg close at the seed price did not latch degradedMode.
         chosen = select_strategies("executeClose", "degradedMode", "false-emergency-mode")
+        self.assertIn("thin_pool", chosen)
         self.assertIn("multi_actor_hedge", chosen)
         self.assertIn("oracle_price_move", chosen)
         src = setup_block("executeClose", "degradedMode", "false-emergency-mode")
+        self.assertIn("_thinPool", src)
         self.assertIn("_openFilled(ATTACKER", src)
         self.assertIn("_openFilled(VICTIM", src)
-        self.assertIn("_publish(1.015e8)", src)
+        self.assertIn("_publish(1.5e8)", src)
+        self.assertLess(src.index("_thinPool"), src.index("_openFilled"))
 
     def test_random_deposit_total_supply_is_not_a_hedge_sequence(self):
         chosen = select_strategies("deposit", "totalSupply", "")
@@ -59,7 +65,7 @@ class SequenceSelectionTests(unittest.TestCase):
             self.assertNotIn(finding, src)
 
     def test_every_strategy_has_a_why(self):
-        self.assertGreaterEqual(len(STRATEGIES), 8)
+        self.assertGreaterEqual(len(STRATEGIES), 11)
         for strat in STRATEGIES:
             self.assertTrue(strat.why.strip())
 

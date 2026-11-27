@@ -30,10 +30,10 @@ def _re(pattern: str) -> re.Pattern[str]:
 STRATEGIES: tuple[SequenceStrategy, ...] = (
     SequenceStrategy(
         id="epoch_advance",
-        when_fn=_re(r"settle|epoch|requestDeposit|requestRedeem"),
+        when_fn=_re(r"settle|epoch|reconcile|requestDeposit|requestRedeem"),
         when_var=_re(r"."),
         when_family=frozenset(),
-        setup="_queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();",
+        setup="_queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();",
         why=(
             "settle/epoch reverts with no matured head (NoLpEpochProgress). "
             "Queue a pending deposit and warp to its epoch before the mutator."
@@ -44,10 +44,11 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         when_fn=_re(r"settle|reconcile"),
         when_var=_re(r"sharePrice|totalAssets|\bnav\b|rebate|accrued|pledge"),
         when_family=frozenset({"refundable-receipt-in-nav"}),
-        setup="_openFilled(ATTACKER, _long(), 60);",
+        setup="_snapshotNav(); _openFilled(ATTACKER, _long(), 60);",
         why=(
             "NAV/sharePrice tests need a reclaimable receipt in flight. "
-            "Open a filled position before settle so the receipt can sit in NAV."
+            "Snapshot incumbent assets after epoch warp, then open a filled "
+            "position so the receipt can sit in NAV."
         ),
     ),
     SequenceStrategy(
@@ -58,30 +59,19 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         setup="_seedUnownedResidual(1e6);",
         why=(
             "mint-to-pool + accountExcess books into accountedAssets / junior, "
-            "so unassigned stays 0. Seed the residual bucket (reconcile without "
-            "accountExcess, then a reachability write if still empty)."
+            "so unassigned stays 0. Account the cash then reserve that slice in "
+            "the unassigned bucket so reconcile cannot treat it as junior revenue."
         ),
     ),
     SequenceStrategy(
-        id="locked_vs_free",
-        when_fn=_re(r"addMargin|withdraw|commit|execute"),
-        when_var=_re(r"freeSettlement|freeBalance|freeAssets|locked"),
-        when_family=frozenset(),
-        setup="_snapshotFree(ATTACKER);",
+        id="thin_pool",
+        when_fn=_re(r"executeClose|executeOrder|executeOpen"),
+        when_var=_re(r"degradedMode|emergency|frozen"),
+        when_family=frozenset({"false-emergency-mode"}),
+        setup="_thinPool();",
         why=(
-            "Total balance often still includes committed/locked margin, so "
-            "'balance did not drop' is a false fail. Snapshot free = balance - locked."
-        ),
-    ),
-    SequenceStrategy(
-        id="price_print_then_mutate",
-        when_fn=_re(r"addMargin|withdraw|execute"),
-        when_var=_re(r"freeSettlement|freeBalance|executionWindow"),
-        when_family=frozenset({"delayed-order-optionality"}),
-        setup="_openFilled(ATTACKER, _long(), 60); _commitAs(ATTACKER, _openReq('q', _long(), 60)); _publish(1.015e8);",
-        why=(
-            "Delayed-order optionality is after the fill price is public. "
-            "Commit, publish, then mutate free/margin, then execute."
+            "A 1M junior buffer is far above one-side maxProfit, so a hedge "
+            "close cannot trip effectiveAssets < maxLiability. Thin cash first."
         ),
     ),
     SequenceStrategy(
@@ -100,8 +90,31 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         when_fn=_re(r"executeClose|executeOrder|executeOpen"),
         when_var=_re(r"degradedMode|acceptedBasket|minPublishTime|sharePrice"),
         when_family=frozenset({"false-emergency-mode", "oracle-staleness-calendar-watermark"}),
-        setup="_publish(1.015e8);",
+        setup="_publish(1.5e8);",
         why="Close/execute after a material mark move, not at the seed price.",
+    ),
+    SequenceStrategy(
+        id="price_print_then_mutate",
+        when_fn=_re(r"addMargin|withdraw|execute|commit"),
+        when_var=_re(r"freeSettlement|freeBalance|executionWindow"),
+        when_family=frozenset({"delayed-order-optionality"}),
+        setup="_openFilled(ATTACKER, _long(), 60); _commitAs(ATTACKER, _openReq('q', _long(), 60)); _publish(1.5e8);",
+        why=(
+            "Delayed-order optionality is after the fill price is public. "
+            "Commit, publish, then snapshot free and mutate."
+        ),
+    ),
+    SequenceStrategy(
+        id="locked_vs_free",
+        when_fn=_re(r"addMargin|withdraw|commit|execute"),
+        when_var=_re(r"freeSettlement|freeBalance|freeAssets|locked"),
+        when_family=frozenset(),
+        setup="_snapshotFree(ATTACKER);",
+        why=(
+            "Total balance often still includes committed/locked margin, so "
+            "'balance did not drop' is a false fail. Snapshot free = balance - locked "
+            "after the price print / commit, not the raw settlement balance."
+        ),
     ),
     SequenceStrategy(
         id="warp_past_window",

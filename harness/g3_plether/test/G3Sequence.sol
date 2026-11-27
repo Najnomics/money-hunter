@@ -16,6 +16,8 @@ abstract contract G3Sequence is BasePerpTest {
 
     IOrderLifecycleBook internal book;
     uint256 internal snapshotFree;
+    uint256 internal snapshotNav;
+    uint256 internal snapshotVictim;
     uint256 internal lastDepositRequest;
 
     function _riskParams() internal pure override returns (CfdTypes.RiskParams memory) {
@@ -96,8 +98,10 @@ abstract contract G3Sequence is BasePerpTest {
     }
 
     function _warpToDepositEpoch() internal {
+        // requestDeposit returns the shared LP epoch id. Warping to its start is
+        // the generic "mature the head" step; settle without it reverts NoLpEpochProgress.
         uint256 t = lastDepositRequest == 0
-            ? block.timestamp + 1 hours
+            ? block.timestamp + pool.LP_EPOCH_DURATION()
             : juniorVault.depositEpochStart(lastDepositRequest);
         if (block.timestamp < t) {
             vm.warp(t);
@@ -121,11 +125,34 @@ abstract contract G3Sequence is BasePerpTest {
         snapshotFree = _freeOf(who);
     }
 
+    function _snapshotNav() internal {
+        snapshotNav = juniorVault.totalAssets();
+        snapshotVictim = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
+    }
+
     function _seedUnownedResidual(uint256 amount) internal {
+        // mint-to-pool + accountExcess books into accountedAssets / junior, so
+        // unassigned stays 0. Account the cash, then reserve that slice in the
+        // unassigned bucket so reconcile cannot treat it as junior revenue.
         settlementToken.mint(address(pool), amount);
-        try pool.settleLpEpoch(0, 0) {} catch {}
-        if (pool.unassignedAssets() == 0) {
-            stdstore.target(address(pool)).sig("unassignedAssets()").checked_write(amount);
+        try pool.accountExcess() {} catch {}
+        uint256 current = pool.unassignedAssets();
+        stdstore.target(address(pool)).sig("unassignedAssets()").checked_write(current + amount);
+    }
+
+    function _thinPool() internal {
+        // 1M junior >> one-side maxProfit (~50k), so a hedge close cannot trip
+        // effectiveAssets < maxLiability. Keep cash just above the envelope.
+        uint256 keep = 70_000e6;
+        uint256 raw = settlementToken.balanceOf(address(pool));
+        if (raw > keep) {
+            settlementToken.burn(address(pool), raw - keep);
+        }
+        if (pool.accountedAssets() > keep) {
+            stdstore.target(address(pool)).sig("accountedAssets()").checked_write(keep);
+        }
+        if (pool.juniorPrincipal() > keep) {
+            stdstore.target(address(pool)).sig("juniorPrincipal()").checked_write(keep);
         }
     }
 
@@ -136,6 +163,6 @@ abstract contract G3Sequence is BasePerpTest {
     function _closeFilled(address who) internal {
         vm.prank(who);
         uint64 oid = router.commitOrder(CfdTypes.Side.LONG, 50_000e18, 0, 0, true);
-        router.executeOrder(oid, _mockPythUpdateData(1.015e8));
+        router.executeOrder(oid, _mockPythUpdateData(1.5e8));
     }
 }

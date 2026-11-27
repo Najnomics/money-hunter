@@ -38,6 +38,11 @@ NAMED_OPEN_IDS: tuple[str, ...] = (
     "99136",
 )
 
+# Honest SCORE-B: exact test PASSed on a82d4fe and FAILed on the local patch.
+VERIFIED_IDS: frozenset[str] = frozenset(
+    {"97906", "98172", "99075", "97628", "99136"}
+)
+
 
 def harness_root() -> Path:
     return Path(__file__).resolve().parent.parent / "harness" / "g3"

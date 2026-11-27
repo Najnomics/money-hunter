@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.g3_harness import match_test
+from tools.g3_harness import NAMED_OPEN_IDS, VERIFIED_IDS, match_test
 from tools.g3_sequence import select_strategies, setup_block
 from tools.pair_templates import match_pair_template
 
@@ -38,7 +38,7 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
     if fn == "assignUnassignedAssets":
         return "        pool.assignUnassignedAssets(false, ATTACKER);"
     if fn == "addMargin":
-        return "        vm.prank(ATTACKER);\n        try engine.addMargin(ATTACKER, 1e6) {} catch {}"
+        return "        vm.prank(ATTACKER);\n        engine.addMargin(ATTACKER, 1e6);"
     if fn == "commitOrder":
         if "warp_past_window" in strategies:
             return (
@@ -82,6 +82,20 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             "        uint256 shares = juniorVault.balanceOf(address(this));\n"
             "        if (shares > 0) { juniorVault.requestRedeem(shares / 2, address(this), address(this)); }"
         )
+    if fn == "executeLiquidationBatch":
+        return (
+            "        address[] memory accounts = new address[](1);\n"
+            "        accounts[0] = VICTIM;\n"
+            "        try router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8)) {} catch {}"
+        )
+    if fn == "renounceOwnership":
+        return "        try pool.renounceOwnership() {} catch {}"
+    if fn == "applyCalendarConfig":
+        return "        // calendar mutator — oracle helpers already ran\n        _publish(1.5e8);"
+    if fn == "settleTraderClaim":
+        return "        try engine.settleTraderClaim(ATTACKER) {} catch {}"
+    if fn in {"assessCommittedOrder", "evaluateOpen"}:
+        return "        _commitAs(ATTACKER, _openReq('a', _long(), 60));"
     return f"        // generic mutator `{fn}` — helpers already ran\n        _settleLpEpochForTest();"
 
 
@@ -94,9 +108,8 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
         )
     if var in {"sharePrice", "nav", "totalAssets", "vpiRebateReserve", "pnlPledgeAssets"}:
         return (
-            "        uint256 navAfter = juniorVault.totalAssets();\n"
             "        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));\n"
-            '        require(navAfter != navBefore || victimAfter != victimBefore, "NAV ignored reclaimable receipt");'
+            '        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");'
         )
     if var in {"unassignedAssets", "highWaterMark"}:
         return (
@@ -135,13 +148,7 @@ def render_test(function: str, var: str, family: str = "") -> str:
     setup = setup_block(function, var, family)
     act = _act(function, var, strategies)
     assertion = _assert(function, var, family, strategies)
-    snapshot = ""
-    if var in {"sharePrice", "nav", "totalAssets", "vpiRebateReserve", "pnlPledgeAssets"}:
-        snapshot = (
-            "        uint256 navBefore = juniorVault.totalAssets();\n"
-            "        uint256 victimBefore = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));"
-        )
-    body = "\n".join(p for p in (snapshot, setup, act, assertion) if p)
+    body = "\n".join(p for p in (setup, act, assertion) if p)
     return (
         f"    function {name}() public {{\n"
         f"{body}\n"
@@ -168,3 +175,29 @@ def write_generated(pairs: list[tuple[str, str, str]], dest: Path | None = None)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(render_file(pairs), encoding="utf-8")
     return dest
+
+
+def blind_items() -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]]]:
+    """33 remaining NAMED_OPEN + 25 pair-only from the miss catalog, not the answer key."""
+    from tests.plether_misses import MISSES
+
+    named_open = set(NAMED_OPEN_IDS)
+    named: list[tuple[str, str, str]] = []
+    pair_only: list[tuple[str, str, str]] = []
+    for miss in MISSES:
+        item = (miss.function, miss.var, miss.family)
+        if miss.id in named_open and miss.id not in VERIFIED_IDS:
+            named.append(item)
+        elif miss.bucket == "PAIR-ONLY" and miss.id not in named_open:
+            pair_only.append(item)
+    return named, pair_only
+
+
+def main() -> Path:
+    named, pair_only = blind_items()
+    return write_generated(named + pair_only)
+
+
+if __name__ == "__main__":
+    path = main()
+    print(path)

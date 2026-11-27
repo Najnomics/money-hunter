@@ -17,8 +17,9 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_queueDeposit", src)
         self.assertIn("_warpToDepositEpoch", src)
         self.assertIn("_openFilled", src)
-        self.assertIn("navBefore", src)
-        self.assertIn("NAV ignored reclaimable receipt", src)
+        self.assertIn("_snapshotNav", src)
+        self.assertIn("snapshotVictim", src)
+        self.assertIn("incumbent assets ignored reclaimable receipt", src)
 
     def test_assign_unassigned_emits_residual_seed(self):
         src = render_test("assignUnassignedAssets", "unassignedAssets", "hwm-recap-accounting")
@@ -36,7 +37,8 @@ class G3PocGeneratorTests(unittest.TestCase):
         src = render_test("executeClose", "degradedMode", "false-emergency-mode")
         self.assertIn("_openFilled(ATTACKER", src)
         self.assertIn("_openFilled(VICTIM", src)
-        self.assertIn("_publish(1.015e8)", src)
+        self.assertIn("_thinPool", src)
+        self.assertIn("_publish(1.5e8)", src)
         self.assertIn("_closeFilled", src)
         self.assertIn("degradedMode", src)
 
@@ -53,6 +55,17 @@ class G3PocGeneratorTests(unittest.TestCase):
             ]
         )
         self.assertEqual(src.count("function test_attack_settleLpEpoch_sharePrice"), 1)
+
+    def test_blind_catalog_is_named_open_plus_pair_only(self):
+        from tools.g3_harness import VERIFIED_IDS
+        from tools.g3_poc_generator import blind_items
+
+        named, pair_only = blind_items()
+        self.assertEqual(len(named), 33)
+        self.assertEqual(len(pair_only), 25)
+        self.assertEqual(len(VERIFIED_IDS), 5)
+        src = GEN.read_text(encoding="utf-8")
+        self.assertNotIn("findings/plether-key", src)
 
 
 if __name__ == "__main__":
