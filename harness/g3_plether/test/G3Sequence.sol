@@ -24,6 +24,7 @@ abstract contract G3Sequence is BasePerpTest {
     uint256 internal snapshotSenior;
     uint256 internal snapshotLiqReserve;
     uint256 internal snapshotTreasury;
+    uint256 internal snapshotMark;
     uint256 internal lastDepositRequest;
     uint256 internal openNonce;
     uint64 internal lastCommitId;
@@ -140,6 +141,15 @@ abstract contract G3Sequence is BasePerpTest {
     }
 
     function _openAtFirstLegalMark(address who, CfdTypes.Side side) internal returns (uint64 oid) {
+        return _openAtFirstLegalMarkAt(who, side, 50_000e18, 50_000e6);
+    }
+
+    function _openAtFirstLegalMarkAt(
+        address who,
+        CfdTypes.Side side,
+        uint256 sizeDelta,
+        uint256 marginDelta
+    ) internal returns (uint64 oid) {
         uint256[8] memory marks;
         marks[0] = 1.02e8;
         marks[1] = 1.05e8;
@@ -152,7 +162,10 @@ abstract contract G3Sequence is BasePerpTest {
         for (uint256 i = 0; i < marks.length; ++i) {
             _publish(marks[i]);
             openNonce += 1;
-            oid = _commitAs(who, _openReq(bytes32(openNonce ^ uint256(uint160(who))), side, 60));
+            oid = _commitAs(
+                who,
+                _openReqAt(bytes32(openNonce ^ uint256(uint160(who))), side, 60, sizeDelta, marginDelta)
+            );
             try router.executeOrder(oid, _mockPythUpdateData(marks[i])) returns (
                 OrderV3Types.ExecutionResult memory result
             ) {
@@ -225,6 +238,10 @@ abstract contract G3Sequence is BasePerpTest {
 
     function _snapshotTreasury() internal {
         snapshotTreasury = clearinghouse.balanceAssets(engine.protocolTreasury());
+    }
+
+    function _snapshotMark() internal {
+        snapshotMark = engine.lastMarkPrice();
     }
 
     function settleLpEpochForTry() public {

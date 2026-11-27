@@ -43,6 +43,8 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             )
         if "unowned_residual" in strategies:
             return "        _trySettleLpEpoch();"
+        if var == "totalSupply":
+            return "        _trySettleLpEpoch();"
         return "        _settleLpEpochForTest();"
     if fn == "assignUnassignedAssets":
         return "        pool.assignUnassignedAssets(false, ATTACKER);"
@@ -72,11 +74,7 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
                 "        );"
             )
         if "legal_mark_search" in strategies:
-            body = ""
-            if "counterparty_open" in strategies:
-                body = "        _closeFilled(VICTIM);\n"
-            body += "        _openAtFirstLegalMark(ATTACKER, _long());"
-            return body
+            return "        _openAtFirstLegalMarkAt(ATTACKER, _long(), 12_000e18, 4_000e6);"
         side = "_short()" if "skew_seed" in strategies else "_long()"
         body = (
             f'        uint64 oid = _commitAs(ATTACKER, _openReq("x", {side}, 60));\n'
@@ -136,7 +134,10 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             "        engine.settleTraderClaim(ATTACKER);"
         )
     if fn in {"assessCommittedOrder", "evaluateOpen"}:
-        return '        _commitAs(ATTACKER, _openReq("a", _long(), 60));'
+        body = '        _commitAs(ATTACKER, _openReq("a", _long(), 60));'
+        if var in {"acceptedBasket", "currentExecutionConfigHash"}:
+            body += "\n        _publish(1.5e8);"
+        return body
     if re.search(r"liquidation|adverse", fn, re.I):
         return (
             "        address[] memory accounts = new address[](1);\n"
@@ -191,7 +192,10 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
         )
     if var in {"acceptedBasket", "currentExecutionConfigHash"}:
         return (
-            '        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");'
+            "        require(\n"
+            "            engine.lastMarkPrice() != snapshotMark,\n"
+            '            "oracle/config path did not refresh the mark"\n'
+            "        );"
         )
     if var == "highWaterMark":
         return (
@@ -279,6 +283,8 @@ def render_test(function: str, var: str, family: str = "") -> str:
         snap = "        _snapshotLiqReserve(ATTACKER);"
     if var == "protocolTreasury":
         snap = "        _snapshotTreasury();"
+    if var in {"acceptedBasket", "currentExecutionConfigHash"}:
+        snap = "        _snapshotMark();"
     body = "\n".join(p for p in (setup, snap, act, assertion) if p)
     return (
         f"    function {name}() public {{\n"

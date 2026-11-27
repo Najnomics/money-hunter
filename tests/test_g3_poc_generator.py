@@ -102,10 +102,10 @@ class G3PocGeneratorTests(unittest.TestCase):
     def test_execute_open_degraded_closes_the_counterparty(self):
         src = render_test("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("_openFilled(VICTIM, _short()", src)
-        self.assertIn("_closeFilled(VICTIM)", src)
         self.assertIn("_thinPool()", src)
-        self.assertIn("_openAtFirstLegalMark", src)
-        self.assertLess(src.index("_closeFilled(VICTIM)"), src.index("_openAtFirstLegalMark"))
+        self.assertIn("_thinPoolTo(40_000e6)", src)
+        self.assertIn("_openAtFirstLegalMarkAt", src)
+        self.assertNotIn("_closeFilled(VICTIM)", src)
 
     def test_settle_unassigned_does_not_queue_after_residual(self):
         src = render_test("settleLpEpoch", "unassignedAssets", "hwm-recap-accounting")

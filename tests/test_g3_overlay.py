@@ -83,6 +83,18 @@ class OverlaySelectionTests(unittest.TestCase):
             "pending_order",
         )
 
+    def test_accepted_basket_and_claim_use_family_overlays(self):
+        self.assertEqual(
+            overlay_id("applyCalendarConfig", "acceptedBasket", "oracle-staleness-calendar-watermark"),
+            "first_tick",
+        )
+        self.assertEqual(
+            overlay_id("commitOrder", "traderClaimBalance", "delayed-order-optionality"),
+            "pending_order",
+        )
+        src = (ROOT / "tools" / "g3_overlay.py").read_text(encoding="utf-8")
+        self.assertIn("if (lastMarkPrice == 0)", src)
+
 
 if __name__ == "__main__":
     unittest.main()

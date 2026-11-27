@@ -53,6 +53,11 @@ Selected from `(function, var, family)` tokens only. No finding ids in the gener
 | 37 | `G3Sequence._openAtFirstLegalMark` + `legal_mark_search` | `test_execute_open_degraded_closes_the_counterparty`, `test_sequence_helpers_search_marks_and_sweep_liquidation` | Admission / false-emergency probes that are skew-illegal at the seed mark or a hardcoded shock |
 | 38 | `g3_poc_generator._assert` — `liquidationReserve` / `protocolTreasury` snapshots | `test_execute_liquidation_reserve_asserts_bucket_move` | Pair-only reserve/treasury sinks that previously had no distinguishing assertion |
 | 39 | `g3_sequence.epoch_advance` — HWM/senior observe leftover recap without a deposit head | `test_hwm_reconcile_seeds_recap_and_takes_a_second_pass` | Recap residual that is masked when a matured deposit moves HWM on both pin and overlay |
+| 40 | `g3_poc_generator._act` — `settleLpEpoch × totalSupply` uses `_trySettleLpEpoch` | `test_settle_shareprice_emits_epoch_and_receipt_helpers` | Overflow freeze on settle that panics the internal helper before the convert assertion |
+| 41 | `g3_sequence.pending_recap` — settle/reconcile only, not assign | `test_assign_unassigned_emits_residual_seed` | Assign × HWM leftover that recap-seed turned into a no-op |
+| 42 | `G3Sequence._openAtFirstLegalMarkAt` + `drain_after_hedge` | `test_execute_open_degraded_closes_the_counterparty` | False-emergency admission into thin cash after a counterparty fill, at a searched mark and size |
+| 43 | `g3_overlay.first_tick` — do not refresh an already-set mark | `test_accepted_basket_and_claim_use_family_overlays` | Calendar/config/basket prints that only move lastMark; overlay keeps the seed mark |
+| 44 | `g3_overlay` — `traderClaimBalance` uses `pending_order`; `claim_seed_live` | `test_accepted_basket_and_claim_use_family_overlays` | Commit/close vs standing claim leftover |
 
 Tests: `tests/test_g3_sequence.py`, `tests/test_g3_poc_generator.py`, `tests/test_g3_overlay.py`, plus `tests/test_plether_recall.py` and `tests/test_recall_gates.py`.
 

@@ -41,7 +41,7 @@ contract ApexG3GeneratedTest is G3Sequence {
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
         // strategy:supply_headroom — Overflow/freeze probes drive virtual-offset supply to uint max before the mutator.
         _nearMaxSupply();
-        _settleLpEpochForTest();
+        _trySettleLpEpoch();
         try juniorVault.convertToShares(1e6) returns (uint256) {
             revert("conversion not frozen");
         } catch {}
@@ -138,13 +138,17 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_executeOrder_acceptedBasket() public {
         // strategy:oracle_price_move — Close/execute after a material mark move, not at the seed price.
         _publish(1.5e8);
+        _snapshotMark();
         uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
         OrderV3Types.ExecutionResult memory execResult = router.executeOrder(oid, _mockPythUpdateData(1e8));
         require(
             uint8(execResult.status) == uint8(OrderV3Types.LifecycleStatus.Executed),
             "execute after oracle/config print failed"
         );
-        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
+        require(
+            engine.lastMarkPrice() != snapshotMark,
+            "oracle/config path did not refresh the mark"
+        );
     }
 
     function test_attack_reconcile_unassignedAssets() public {
@@ -165,8 +169,6 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_assignUnassignedAssets_highWaterMark() public {
         // strategy:unowned_residual — Write leftover into the unassigned bucket after the deposit is queued. Minting it before requestDeposit freezes the vault; accountExcess after a matured head consumes the epoch.
         _seedUnownedResidual(1e6);
-        // strategy:pending_recap — HWM/senior overwrite needs a leftover recap bucket. An unowned mint alone does not create a claimant residual for a second observation.
-        _seedPendingRecap(1e6);
         _snapshotHwm();
         pool.assignUnassignedAssets(false, ATTACKER);
         require(
@@ -274,9 +276,10 @@ contract ApexG3GeneratedTest is G3Sequence {
         _thinPool();
         // strategy:counterparty_open — Admission backing is revealed when an opposite-side winner already exists. A lone open into thin cash does not latch degradedMode.
         _openFilled(VICTIM, _short(), 60);
+        // strategy:drain_after_hedge — After the counterparty fill, drain remaining cash so a searched-mark open spends backing already owed to the winner.
+        _thinPoolTo(40_000e6);
         // strategy:legal_mark_search — A hardcoded seed or 1.5x print is often skew-illegal after a counterparty fill. Search marks until executeOpen admits, then close the winner.
-        _closeFilled(VICTIM);
-        _openAtFirstLegalMark(ATTACKER, _long());
+        _openAtFirstLegalMarkAt(ATTACKER, _long(), 12_000e18, 4_000e6);
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 
@@ -308,13 +311,19 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_applyRouterConfigAfterOracle_acceptedBasket() public {
+        _snapshotMark();
         _publish(1.5e8);
-        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
+        require(
+            engine.lastMarkPrice() != snapshotMark,
+            "oracle/config path did not refresh the mark"
+        );
     }
 
     function test_attack_executeClose_traderClaimBalance() public {
         // strategy:filled_position — Close/margin probes need a live filled position, not an empty book.
         _openFilled(ATTACKER, _long(), 60);
+        // strategy:claim_seed_live — Commit/close vs claim probes need a standing claim leftover, not only live-position lock.
+        _seedTraderClaim(ATTACKER, 1e6);
         _snapshotFree(ATTACKER);
         _closeFilled(ATTACKER);
         require(_freeOf(ATTACKER) != snapshotFree, "trader claim/free path was a no-op");
@@ -326,9 +335,13 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_applyCalendarConfig_acceptedBasket() public {
+        _snapshotMark();
         // calendar mutator — oracle helpers already ran
         _publish(1.5e8);
-        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
+        require(
+            engine.lastMarkPrice() != snapshotMark,
+            "oracle/config path did not refresh the mark"
+        );
     }
 
     function test_attack_executeLiquidationBatch_liquidationReserve() public {
@@ -359,10 +372,14 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_adverseLiquidationPrice_acceptedBasket() public {
+        _snapshotMark();
         address[] memory accounts = new address[](1);
         accounts[0] = VICTIM;
         try router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8)) {} catch {}
-        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
+        require(
+            engine.lastMarkPrice() != snapshotMark,
+            "oracle/config path did not refresh the mark"
+        );
     }
 
     function test_attack_requestRedeem_sharePrice() public {
@@ -376,8 +393,12 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_applyRouterConfig_currentExecutionConfigHash() public {
+        _snapshotMark();
         _publish(1.5e8);
-        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
+        require(
+            engine.lastMarkPrice() != snapshotMark,
+            "oracle/config path did not refresh the mark"
+        );
     }
 
     function test_attack_renounceOwnership_degradedMode() public {
@@ -431,11 +452,18 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_evaluateOpen_acceptedBasket() public {
+        _snapshotMark();
         _commitAs(ATTACKER, _openReq("a", _long(), 60));
-        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
+        _publish(1.5e8);
+        require(
+            engine.lastMarkPrice() != snapshotMark,
+            "oracle/config path did not refresh the mark"
+        );
     }
 
     function test_attack_commitOrder_traderClaimBalance() public {
+        // strategy:claim_seed_live — Commit/close vs claim probes need a standing claim leftover, not only live-position lock.
+        _seedTraderClaim(ATTACKER, 1e6);
         _snapshotFree(ATTACKER);
         _commitAs(ATTACKER, _openReq("c", _long(), 60));
         require(_freeOf(ATTACKER) != snapshotFree, "trader claim/free path was a no-op");

@@ -24,6 +24,10 @@ def overlay_id(function: str, var: str, family: str = "") -> str:
         return "min_window"
     if var_l in {"minpublishtime", "publishtime", "staleness"}:
         return "first_tick"
+    if var_l in {"acceptedbasket", "currentexecutionconfighash"}:
+        return "first_tick"
+    if "traderclaim" in var_l:
+        return "pending_order"
     if fn_l == "addmargin" or (family == "delayed-order-optionality" and "free" in var_l):
         return "pending_order"
     if "free" in var_l and fn_l in {
@@ -67,7 +71,16 @@ def _patches() -> dict[str, list[tuple[str, str, str]]]:
                 "PletherOracle.sol",
                 "uint64 minPublishTime = request.commitTime + 1;",
                 "uint64 minPublishTime = request.commitTime + 15;",
-            )
+            ),
+            (
+                "CfdEngine.sol",
+                "        lastMarkPrice = newMarkPrice;\n"
+                "        lastMarkTime = newMarkTime;",
+                "        if (lastMarkPrice == 0) {\n"
+                "            lastMarkPrice = newMarkPrice;\n"
+                "            lastMarkTime = newMarkTime;\n"
+                "        }",
+            ),
         ],
         "overflow_headroom": [
             (

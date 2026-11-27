@@ -101,8 +101,16 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
+        id="claim_seed_live",
+        when_fn=_re(r"commitOrder|executeClose"),
+        when_var=_re(r"traderClaim"),
+        when_family=frozenset(),
+        setup="_seedTraderClaim(ATTACKER, 1e6);",
+        why="Commit/close vs claim probes need a standing claim leftover, not only live-position lock.",
+    ),
+    SequenceStrategy(
         id="pending_recap",
-        when_fn=_re(r"settleLp|reconcile|assign"),
+        when_fn=_re(r"settleLp|reconcile"),
         when_var=_re(r"highWaterMark|seniorPrincipal"),
         when_family=frozenset({"hwm-recap-accounting"}),
         setup="_seedPendingRecap(1e6);",
@@ -176,6 +184,17 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         why=(
             "Admission backing is revealed when an opposite-side winner already exists. "
             "A lone open into thin cash does not latch degradedMode."
+        ),
+    ),
+    SequenceStrategy(
+        id="drain_after_hedge",
+        when_fn=_re(r"executeOpen"),
+        when_var=_re(r"degradedMode|emergency"),
+        when_family=frozenset({"false-emergency-mode"}),
+        setup="_thinPoolTo(40_000e6);",
+        why=(
+            "After the counterparty fill, drain remaining cash so a searched-mark "
+            "open spends backing already owed to the winner."
         ),
     ),
     SequenceStrategy(

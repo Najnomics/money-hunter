@@ -130,13 +130,16 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("thin_pool", chosen)
         self.assertIn("counterparty_open", chosen)
         self.assertIn("legal_mark_search", chosen)
+        self.assertIn("drain_after_hedge", chosen)
         self.assertNotIn("drain_cash", chosen)
         self.assertNotIn("multi_actor_hedge", chosen)
         src = setup_block("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("_thinPool();", src)
         self.assertIn("_openFilled(VICTIM, _short()", src)
+        self.assertIn("_thinPoolTo(40_000e6)", src)
         self.assertNotIn("_publish(1.5e8)", src)
         self.assertNotIn("_thinPoolTo(10_000e6)", src)
+        self.assertLess(src.index("_openFilled(VICTIM, _short()"), src.index("_thinPoolTo(40_000e6)"))
 
     def test_liquidation_freesettlement_sweeps_until_unsafe(self):
         chosen = select_strategies(
@@ -171,6 +174,8 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("_sweepUntilLiquidatable", src)
         self.assertIn("isLiquidatableAt", src)
         self.assertIn("_openAtFirstLegalMark", src)
+        self.assertIn("_openAtFirstLegalMarkAt", src)
+        self.assertIn("_snapshotMark", src)
         self.assertIn("_snapshotLiqReserve", src)
         self.assertIn("_snapshotTreasury", src)
         self.assertIn("_trySettleLpEpoch", src)
