@@ -46,6 +46,10 @@ Slices of 3–5 unique tests; this file is appended after each slice.
 | `executeClose_degradedMode` | `margin_backing` | 97590 | PASS | FAIL did not latch | HOLD |
 | `executeClose_traderClaimBalance` | `pending_order` | 100087 | PASS | FAIL SettlementFloorOrderPending | HOLD |
 | `executeClose_vpiRebateReserve` | `zero_vpi` | 97903, 97748, 99933 | PASS | FAIL rebate no-op | HOLD |
+| `executeLiquidationBatch_freeSettlement` | `pending_order` | 98941 | PASS | FAIL pending binding | HOLD |
+| `executeLiquidationBatch_liquidationReserve` | `pending_order` | 97649, 97836 | PASS | FAIL reserve no-op | HOLD |
+| `executeOpen_degradedMode` | `margin_backing` | 97605 | PASS | FAIL did not latch | HOLD |
+| `executeOpen_vpiRebateReserve` | `zero_vpi` | 98035 | PASS | FAIL rebate no-op | HOLD |
 
 ## Slice log
 
@@ -70,3 +74,7 @@ Slices run oldest-name first. HOLD = pin PASS + matching overlay FAIL. DEMOTED =
 ### Slice 5 (unique 17–20)
 
 4/4 HOLD. Cumulative HOLD unique 20/43. Zeroing open/close execution fees in `zero_vpi` did not demote rebate close.
+
+### Slice 6 (unique 21–24) — wrap-up stop
+
+4/4 HOLD. Cumulative HOLD unique **24/43**, IDs **32/62**. Zero demotions. Remaining 19 unique tests / 30 IDs not re-checked. Mismatched-pair sample **not run**.
