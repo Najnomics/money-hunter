@@ -55,4 +55,17 @@ function test_attack_commitOrder_executionWindow() public {
 
 `run_distinguishing` falls back to `--match-contract <FamilyAttack>` when `test_attack_<fn>_<var>` does not exist. Any pair tagged with a family therefore runs an unrelated planted-bug test and PASSes.
 
-Counts in the next commit after the random-pair / patched-mock run.
+## 3. Falsification counts (current oracle)
+
+Blind3b `run_distinguishing` still uses `harness/g3` mocks. It never loads the Plether pin, so a post-audit patch is invisible.
+
+| Experiment | n | PASS | FAIL | INCONCLUSIVE |
+|---|---:|---:|---:|---:|
+| 8 target tests vs "patched Plether" (mocks unchanged) | 8 | **8** | 0 | 0 |
+| 20 random non-bug public mutator × sink pairs | 20 | **4** | 0 | 16 |
+
+Required: 8/8 FAIL on patched code; most of 20 FAIL or inconclusive.
+
+Observed: 8/8 still PASS. 4/20 false PASS (`deposit/claimDeposit/requestDeposit × totalSupply|sharePrice`, `finalizePoolConfig × highWaterMark`) because `match_pair_template` assigned a family and `--match-contract` ran an unrelated planted-bug test.
+
+**Oracle is broken.** Next: exact-match only; tests must call real `HousePool` / `OrderRouter` / `TrancheVault` and assert attacker gain, victim loss, or freeze; patched pin must FAIL.
