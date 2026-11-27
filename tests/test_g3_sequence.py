@@ -22,6 +22,12 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("_openFilled", src)
         self.assertLess(src.index("_openFilled"), src.index("_queueDeposit"))
 
+    def test_settle_unassigned_seeds_unowned_residual(self):
+        chosen = select_strategies("settleLpEpoch", "unassignedAssets", "hwm-recap-accounting")
+        self.assertIn("unowned_residual", chosen)
+        src = setup_block("settleLpEpoch", "unassignedAssets", "hwm-recap-accounting")
+        self.assertIn("_seedUnownedResidual", src)
+
     def test_assign_unassigned_needs_unowned_residual_not_account_excess(self):
         # Root cause: mint-to-pool + accountExcess left unassigned=0.
         chosen = select_strategies("assignUnassignedAssets", "unassignedAssets", "hwm-recap-accounting")

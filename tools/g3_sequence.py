@@ -60,7 +60,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="unowned_residual",
-        when_fn=_re(r"assign|reconcile|accountExcess"),
+        when_fn=_re(r"assign|reconcile|accountExcess|settle"),
         when_var=_re(r"unassigned|residual|unowned|highWater"),
         when_family=frozenset(),
         setup="_seedUnownedResidual(1e6);",
