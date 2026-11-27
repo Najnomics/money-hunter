@@ -1,0 +1,36 @@
+# Local falsification patches. Not an Immunefi submission.
+# Apply on the a82d4fe pin, run apex_g3 tests, then `git checkout --` these files.
+--- a/packages/perps/src/router/OrderLiquidationBatchLogic.sol
++++ b/packages/perps/src/router/OrderLiquidationBatchLogic.sol
+@@ -284,7 +284,7 @@
+         if (uint256(bounds.submitBy) < block.timestamp) {
+             revert OrderRouter__InvalidSubmitBy();
+         }
+-        if (bounds.executionWindowSeconds == 0 || bounds.executionWindowSeconds > host.maxExecutionWindowSeconds()) {
++        if (bounds.executionWindowSeconds < 15 || bounds.executionWindowSeconds > host.maxExecutionWindowSeconds()) {
+             revert OrderRouter__InvalidExecutionWindow();
+         }
+--- a/packages/perps/src/PletherOracle.sol
++++ b/packages/perps/src/PletherOracle.sol
+@@ -607,7 +607,7 @@
+             revert PletherOracle__InsufficientFee(msg.value, executionFunding);
+         }
+ 
+-        uint64 minPublishTime = request.commitTime + 1;
++        uint64 minPublishTime = request.commitTime + 15;
+         uint256 settlementDeadline = uint256(request.commitTime) + orderSettlementWindow;
+--- a/packages/perps/src/TrancheVault.sol
++++ b/packages/perps/src/TrancheVault.sol
+@@ -1406,6 +1406,7 @@
+         uint256 netAssets = feeBps == 0 ? assets : Math.mulDiv(assets, BPS - feeBps, BPS, Math.Rounding.Floor);
+         uint256 denominator = pricingAssets + assets + 1 - netAssets;
++        if (pricingSupply > type(uint256).max - VIRTUAL_SHARES) { return 0; }
+         shares = Math.mulDiv(netAssets, pricingSupply + VIRTUAL_SHARES, denominator, Math.Rounding.Floor);
+     }
+@@ -1855,6 +1856,7 @@
+         uint256 totalAssets_,
+         Math.Rounding rounding
+     ) internal view returns (uint256) {
++        if (accruedTotalSupply() > type(uint256).max - VIRTUAL_SHARES) { return 0; }
+         return Math.mulDiv(assets, accruedTotalSupply() + VIRTUAL_SHARES, totalAssets_ + 1, rounding);
+     }

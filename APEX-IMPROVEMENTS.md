@@ -176,4 +176,4 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 
 **Cause.** Blind3 queued 96 prepared Python scaffolds (`execute=false`) and recorded 0 verified. `queue_cartesian_g3` refused to execute. Recall stayed at 0.
 
-**Fix (this branch).** `execute_queued_g3` (`experiment execute_g3`) requires `execute=true` and runs family Foundry attacks under `harness/g3` with local forge. A passing distinguishing attack is `verdict=confirmed` and Gate 4 can verify. Failures are `inconclusive`, not kills. Never submit. Tests: `tests/test_g3_execute.py`.
+**Fix (this branch).** `execute_queued_g3` (`experiment execute_g3`) requires `execute=true` and runs **exact** `test_attack_<fn>_<var>` Foundry tests against the real Plether pin (`harness/g3_plether`, `OrderRouter` / `TrancheVault` / `HousePool`). No family-contract fallback. Missing tests are `inconclusive`. A PASS on the buggy pin that FAILs on a local patch is the only verified evidence. Never submit. Tests: `tests/test_g3_execute.py`, `tests/test_g3_falsify.py`.

@@ -68,4 +68,24 @@ Required: 8/8 FAIL on patched code; most of 20 FAIL or inconclusive.
 
 Observed: 8/8 still PASS. 4/20 false PASS (`deposit/claimDeposit/requestDeposit × totalSupply|sharePrice`, `finalizePoolConfig × highWaterMark`) because `match_pair_template` assigned a family and `--match-contract` ran an unrelated planted-bug test.
 
-**Oracle is broken.** Next: exact-match only; tests must call real `HousePool` / `OrderRouter` / `TrancheVault` and assert attacker gain, victim loss, or freeze; patched pin must FAIL.
+**Oracle was broken.** Family fallback removed. Live tests are `harness/g3_plether/test/ApexG3Targets.t.sol`.
+
+## 4. After the oracle fix
+
+### 97591 / 99136 real calls
+
+99136 `test_attack_commitOrder_executionWindow` calls `OrderRouter.commitOrder` with `executionWindowSeconds = 2`, then `OrderRouter.expireOrder`. Timing is read from `OrderLifecycleBook.orderTiming`. Attacker margin is `MarginClearinghouse.balanceAssets`.
+
+97591 `test_attack_settleLpEpoch_sharePrice` calls `OrderRouter.commitOrder` / `executeOrder` and `_settleLpEpochForTest` (`HousePool.settleLpEpoch`). It currently FAILs on the pin (`HousePool__NoLpEpochProgress`) — not verified.
+
+### Counts
+
+| Experiment | n | PASS | FAIL | INCONCLUSIVE |
+|---|---:|---:|---:|---:|
+| 8 targets on buggy pin `a82d4fe` | 8 | 5 | 4 | 0 |
+| Those 5 on patched pin (min window 15, virtual-share headroom, minPublishTime+15) | 5 | **0** | **5** | 0 |
+| 20 random non-bug pairs (exact-match oracle) | 20 | 0 | 0 | **20** |
+
+5 that PASS then FAIL on patch: 97906, 98172, 99075, 97628, 99136.
+
+Patches restored via `git checkout`. Never submit.

@@ -40,6 +40,23 @@ def harness_root() -> Path:
     return Path(__file__).resolve().parent.parent / "harness" / "g3"
 
 
+def plether_perps_root() -> Path:
+    override = os.environ.get("APEX_PLETHER_PERPS")
+    if override:
+        return Path(override)
+    return Path("/agent/repos/audit-comp-plether/packages/perps")
+
+
+def sync_plether_tests() -> Path:
+    src = Path(__file__).resolve().parent.parent / "harness" / "g3_plether" / "test"
+    dest = plether_perps_root() / "test" / "apex_g3"
+    dest.mkdir(parents=True, exist_ok=True)
+    if src.exists():
+        for path in src.glob("*.t.sol"):
+            (dest / path.name).write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    return dest
+
+
 def forge_bin() -> str:
     found = shutil.which("forge")
     if found:
@@ -83,41 +100,71 @@ def run_distinguishing(
     var: str,
     timeout_seconds: int = 120,
 ) -> dict:
-    """Run the family Foundry attack. Prefer an exact test_attack_fn_var match."""
-    root = harness_root()
-    contract = contract_for(family, function, var)
-    if not contract:
-        return {
-            "ok": False,
-            "returncode": 2,
-            "stdout": "",
-            "stderr": f"no family fixture for family={family} {function}::{var}",
-            "command": "",
-            "contract": "",
-        }
+    """Run the exact test_attack_<fn>_<var> against real Plether. No family fallback."""
+    del family  # family must not select an unrelated planted-bug contract
+    test_name = match_test(function, var)
+    empty = {
+        "ok": False,
+        "returncode": 2,
+        "stdout": "",
+        "stderr": "",
+        "command": "",
+        "contract": "ApexG3TargetsTest",
+        "timed_out": False,
+        "inconclusive": True,
+    }
+    if not test_name:
+        empty["stderr"] = f"no exact test for {function}::{var}"
+        return empty
+    sources = Path(__file__).resolve().parent.parent / "harness" / "g3_plether" / "test"
+    if sources.exists() and not any(
+        f"function {test_name}(" in p.read_text(encoding="utf-8") for p in sources.glob("*.t.sol")
+    ):
+        empty["stderr"] = f"no exact test source for {test_name}"
+        return empty
+    root = plether_perps_root()
+    if not (root / "foundry.toml").exists():
+        empty["stderr"] = f"plether perps root missing: {root}"
+        return empty
+    sync_plether_tests()
     forge = forge_bin()
     env = os.environ.copy()
     env["PATH"] = str(Path(forge).parent) + os.pathsep + env.get("PATH", "")
-    test_name = match_test(function, var)
-    command = [forge, "test", "--root", str(root), "--match-contract", contract, "-vv"]
-    if test_name:
-        command.extend(["--match-test", test_name])
+    command = [
+        forge,
+        "test",
+        "--root",
+        str(root),
+        "--match-path",
+        "test/apex_g3/*",
+        "--match-test",
+        f"^{test_name}$",
+        "-vv",
+    ]
     result = run_command(command, cwd=root, timeout_seconds=timeout_seconds, env=env)
     stdout = result.stdout or ""
-    no_match = "No tests match" in (result.stderr or "") or "No tests match" in stdout
-    if no_match and test_name:
-        command = [forge, "test", "--root", str(root), "--match-contract", contract, "-vv"]
-        result = run_command(command, cwd=root, timeout_seconds=timeout_seconds, env=env)
-        stdout = result.stdout or ""
-    passed = result.returncode == 0 and "fail" not in stdout.lower().split("Suite result:")[-1]
-    if result.returncode == 0 and "[FAIL" not in stdout:
-        passed = True
+    stderr = result.stderr or ""
+    blob = stdout + stderr
+    no_match = "No tests match" in blob or "0 tests" in blob and "passed" in blob and "[PASS]" not in blob
+    if no_match or "[PASS]" not in stdout and "[FAIL" not in stdout:
+        return {
+            "ok": False,
+            "returncode": result.returncode,
+            "stdout": stdout,
+            "stderr": stderr or f"no exact test {test_name}",
+            "command": " ".join(command),
+            "contract": "ApexG3TargetsTest",
+            "timed_out": result.timed_out,
+            "inconclusive": True,
+        }
+    passed = result.returncode == 0 and "[FAIL" not in stdout
     return {
         "ok": passed and not result.timed_out,
         "returncode": result.returncode,
         "stdout": stdout,
-        "stderr": result.stderr or "",
+        "stderr": stderr,
         "command": " ".join(command),
-        "contract": contract,
+        "contract": "ApexG3TargetsTest",
         "timed_out": result.timed_out,
+        "inconclusive": False,
     }
