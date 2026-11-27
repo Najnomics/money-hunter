@@ -27,3 +27,10 @@ Branch: `cursor/lido-lend-audit`. Harness: Money Hunter pipeline, policy `standa
 - Docs deep-dive before code: core spec, architecture, market-controller, lender-settlement, guardian-signals, roles, exit-books, IRM spec, bundler guide. Claims + ambiguity list in findings/lido-lend/DOCS.md.
 - Audits indexed (dedupe set): Cyfrin 62 (0c/0h) at pinned commits; MixBytes guardian; CB audits; Easy Track 11 low. findings/lido-lend/AUDITS.md.
 - Intel: corpus has no Lido-Lend rows; 6 mandatory family cards present; frontier: no public contest results; 2026 lending-hack median $756k.
+
+## 2026-11-27 — Phase 2 Model complete
+
+- 13 flows mapped (11 CRITICAL: F01 settle, F02 fallbackExit, F03 targeted settle, F04 vault deposit/withdraw, F05 borrow, F06 collateral withdrawal, F07 liquidation, F08 exit book fill, F09 guardian signals, F10 freeze/pause, F11 accrual), 14 falsifiable invariants (INV-C1..C14), all in .apex/02_mental_model.json.
+- Blind predictions recorded for all 11 CRITICAL flows (.apex/predictions/F01..F11-prediction.md), each with PROVENANCE (specs/API only, no .sol bodies read), >=2 surprises, boundary semantics. Skeletons: signature-only extraction.
+- ISS rows (matcher zero-hit, predictions cited API-level docs instead): F03, F04, F05, F06, F11 — flow-name keyword did not match; surfaces exist (vault settleTargets, deposit/redeem, borrow, withdrawCollateral, borrowRate); matcher limitation noted, not bypassed: no unrelated files substituted.
+- Strict-mode extras (vocab/sinks tables) not required under standard policy.
