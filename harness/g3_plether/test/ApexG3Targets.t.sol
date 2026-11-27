@@ -59,7 +59,6 @@ contract ApexG3TargetsTest is BasePerpTest {
         return router.commitOrder(req);
     }
 
-    /// 99136 — OrderRouter.commitOrder accepts a 2s window; expireOrder returns margin.
     function test_attack_commitOrder_executionWindow() public {
         uint256 attBefore = clearinghouse.balanceAssets(ATTACKER);
         uint64 oid = _commitAs(ATTACKER, _openReq("w2", CfdTypes.Side.LONG, 2));
@@ -72,7 +71,6 @@ contract ApexG3TargetsTest is BasePerpTest {
         require(attAfter + 2e6 >= attBefore, "expiry did not return attacker margin");
     }
 
-    /// 97906 — OrderRouter.executeOrder fills the first post-commit tick (commitTime+1).
     function test_attack_commitOrder_minPublishTime() public {
         uint64 oid = _commitAs(ATTACKER, _openReq("tick", CfdTypes.Side.LONG, 60));
         require(book.orderTiming(oid).commitTimestamp > 0, "commit missing");
@@ -81,7 +79,6 @@ contract ApexG3TargetsTest is BasePerpTest {
         require(uint8(result.status) == uint8(OrderV3Types.LifecycleStatus.Executed), "first-tick execute failed");
     }
 
-    /// 97628 — TrancheVault.convertToShares panics near uint256.max (VIRTUAL_SHARES).
     function test_attack_convertToShares_totalSupply() public {
         stdstore.target(address(juniorVault)).sig("totalSupply()").checked_write(type(uint256).max - 500);
         try juniorVault.convertToShares(1e6) returns (uint256) {
@@ -89,14 +86,12 @@ contract ApexG3TargetsTest is BasePerpTest {
         } catch {}
     }
 
-    /// 98172 — TrancheVault.quoteDepositFromState overflows at terminal supply.
     function test_attack_quoteDepositFromState_totalSupply() public {
         try juniorVault.quoteDepositFromState(1e6, 1e6, type(uint256).max - 500, 0) returns (uint256) {
             revert("quoteDepositFromState not frozen");
         } catch {}
     }
 
-    /// 99075 — freeze still holds through HousePool.settleLpEpoch after terminal supply.
     function test_attack_settleLpEpoch_totalSupply() public {
         stdstore.target(address(juniorVault)).sig("totalSupply()").checked_write(type(uint256).max - 500);
         try juniorVault.convertToShares(1e6) returns (uint256) {

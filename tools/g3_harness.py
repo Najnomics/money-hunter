@@ -41,9 +41,9 @@ NAMED_OPEN_IDS: tuple[str, ...] = (
 # Honest SCORE-B: exact test PASSed on a82d4fe and FAILed on the local patch.
 VERIFIED_IDS: frozenset[str] = frozenset(
     {
-        "97906", "98172", "99075", "97628", "99136",
+        "97906", "98172", "97628", "99136",
         "97591", "98209", "98854", "97590",
-        "97677", "97715", "98961", "99470",
+        "97677",
         "97733", "99392", "99280", "97833", "98200",
         "98170",
         "98035", "97903", "97748", "99933", "97971",
@@ -205,8 +205,12 @@ def run_distinguishing(
     stdout = result.stdout or ""
     stderr = result.stderr or ""
     blob = stdout + stderr
-    no_match = "No tests match" in blob or "0 tests" in blob and "passed" in blob and "[PASS]" not in blob
-    if no_match or "[PASS]" not in stdout and "[FAIL" not in stdout:
+    no_match = (
+        "No tests found" in blob
+        or "No tests match" in blob
+        or ("0 tests" in blob and "[PASS]" not in stdout and "[FAIL" not in stdout)
+    )
+    if no_match or ("[PASS]" not in stdout and "[FAIL" not in stdout):
         return {
             "ok": False,
             "returncode": result.returncode,

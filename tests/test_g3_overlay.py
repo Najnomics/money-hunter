@@ -49,6 +49,8 @@ class OverlaySelectionTests(unittest.TestCase):
         self.assertIn('"--match-contract"', src)
         self.assertIn('"ApexG3Generated"', src)
         self.assertNotIn("test/apex_g3/*", src)
+        self.assertIn("No tests found", src)
+        self.assertNotIn('"0 tests" in blob and "passed" in blob', src)
 
     def test_overlay_module_has_no_finding_ids(self):
         src = (ROOT / "tools" / "g3_overlay.py").read_text(encoding="utf-8")
