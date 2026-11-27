@@ -30,6 +30,12 @@ class OverlaySelectionTests(unittest.TestCase):
                 "pending_order",
             )
 
+    def test_senior_principal_uses_assign_outstanding(self):
+        self.assertEqual(
+            overlay_id("settleLpEpoch", "seniorPrincipal", "hwm-recap-accounting"),
+            "assign_outstanding",
+        )
+
     def test_overflow_and_window_stay_on_score_b_overlays(self):
         self.assertEqual(overlay_id("convertToShares", "totalSupply", "share-supply-overflow"), "overflow_headroom")
         self.assertEqual(overlay_id("commitOrder", "executionWindow", "delayed-order-optionality"), "min_window")

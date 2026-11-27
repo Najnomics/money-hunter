@@ -34,7 +34,7 @@ def overlay_id(function: str, var: str, family: str = "") -> str:
         "evaluateopen",
     }:
         return "pending_order"
-    if "unassigned" in var_l or "highwater" in var_l:
+    if "unassigned" in var_l or "highwater" in var_l or var_l == "seniorprincipal":
         return "assign_outstanding"
     if family == "false-emergency-mode" or var_l == "degradedmode":
         return "margin_backing"
