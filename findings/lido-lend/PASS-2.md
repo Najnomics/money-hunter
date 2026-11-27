@@ -30,4 +30,32 @@ Adapter natspec, `docs/specs/api/bundler3-adapters.md`, and `docs/integration/bu
 
 **Kill.** Documented intended API + documented rounding. No live position to size a cut against. Dust gap (1 wei/cut) is program OOS as documented rounding. No funds at risk on the pin.
 
----
+## L-P1-002 — Exit Book debit before withdraw
+
+Gate 2 hypothesis: `fillExitRequest` calls `_book.recordFill` then `_withdraw`. Keep only if a source can return success with `assetsOut != fillAssets` and the debit survives.
+
+### Experiment
+
+| Call | Result |
+|---|---|
+| MorphoExitBook `lastRequestId` | `0` |
+| MorphoExitBook `paused` | `false` |
+| MorphoExitBook `isMarketAllowed(proposedId)` | `false` |
+| Erc4626ExitBook `lastRequestId` | `0` |
+| Erc4626ExitBook `paused` | `false` |
+| MorphoExitBook `fillExitRequest(1, 1e18, dead)` | revert `RequestClosed()` `0x6155e824` |
+| Erc4626ExitBook `fillExitRequest(1, 1e18, dead)` | revert `RequestClosed()` `0x6155e824` |
+
+Source bodies at the pin:
+
+- MorphoExitBook `_withdraw` = `MORPHO.withdraw(..., assets, 0, account, book)`. Core withdraw transfers exactly `assets` of the loan token, no callback.
+- Erc4626ExitBook `_withdraw` = `vault.withdraw(assets, book, account)`. ERC-4626 requires an exact asset amount.
+- `AssetsOutMismatch` reverts unless the book's balance delta equals `fillAssets`.
+- `recordFill` is the same transaction; a revert undoes the debit.
+
+### Gate 3
+
+**Kill.** Fail-closed on mismatch. No live request. No source path that credits the book without matching `fillAssets` on WETH/wstETH. Books are deployed and unused (docs).
+
+Pass 2 verified count remains **0**.
+
