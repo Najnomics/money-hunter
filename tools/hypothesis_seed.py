@@ -54,6 +54,11 @@ HIGH_EV_MUTATOR_RE = re.compile(
     r"rotate|recap|renounce|request|arm|adverse)",
     re.I,
 )
+# Internal helpers stay in the cartesian (high-EV `_apply` / settlement* stems)
+# but must not crowd the G3 top-N ahead of ABI entrypoints (99136: commitOrder).
+INTERNAL_HELPER_RE = re.compile(r"^_|^(settlement)[A-Z]")
+PUBLIC_ENTRY_BONUS = 50
+INTERNAL_HELPER_PENALTY = 45
 
 
 def family_ids_in_hypotheses(hypotheses: Iterable[dict]) -> set[str]:
@@ -382,6 +387,11 @@ def is_public_mutator(surface: dict) -> bool:
     return True
 
 
+def is_internal_helper(name: str) -> bool:
+    """True for `_foo` and camelCase `settlementApply*` bookkeeping helpers."""
+    return bool(INTERNAL_HELPER_RE.search(name or ""))
+
+
 def list_mutators(ctx: ToolContext) -> list[dict]:
     ast_map = ctx.state.section(3, "ast_map") or {}
     surfaces = ast_map.get("surfaces") or []
@@ -474,11 +484,16 @@ def enumerate_pairs(ctx: ToolContext) -> list[tuple[str, str, dict]]:
         fn = str(surface.get("name") or "")
         for var in variables:
             pairs.append((fn, var, surface))
-    pairs.sort(key=lambda item: -_pair_rank(item[0], item[1]))
+    pairs.sort(key=lambda item: -pair_rank(item[0], item[1], item[2]))
     return pairs
 
 
-def _pair_rank(function: str, var: str) -> int:
+def pair_rank(function: str, var: str, surface: dict | None = None) -> int:
+    """Rank a mutator × sink so ABI entrypoints outrank settlement internals.
+
+    High-EV `_apply*` / `settlement*` stems stay enumerable, but a public
+    `commitOrder × executionWindow` (99136) must beat them in the top-N queue.
+    """
     score = 0
     if HIGH_EV_MUTATOR_RE.search(function):
         score += 8
@@ -497,9 +512,17 @@ def _pair_rank(function: str, var: str) -> int:
     ):
         score += 4
     score += template_rank_bonus(function, var)
-    if function.startswith("_") and not HIGH_EV_MUTATOR_RE.search(function):
-        score -= 50
+    if is_internal_helper(function):
+        score -= INTERNAL_HELPER_PENALTY
+    else:
+        score += PUBLIC_ENTRY_BONUS
+        if surface is not None and surface.get("entry") is True:
+            score += 10
     return score
+
+
+def _pair_rank(function: str, var: str, surface: dict | None = None) -> int:
+    return pair_rank(function, var, surface)
 
 
 def covered_pairs(hypotheses: Iterable[dict | Hypothesis], pairs: list[tuple[str, str, dict]]) -> set[tuple[str, str]]:
@@ -615,7 +638,7 @@ def queue_distinguishing_g3(
         test_path = directory / "test_attack.py"
         write_text_atomic(test_path, distinguishing_scaffold(fn, var, hyp_id))
         artifact = rel_to(test_path, ctx.workspace)
-        rank = _pair_rank(fn, var)
+        rank = pair_rank(fn, var, surface)
         observation = (
             f"{PAIR_MARK}{token} queued distinguishing G3 attack on `{fn}` × `{var}` "
             "(attacker path / adversarial ordering / first-tick). Not executed."

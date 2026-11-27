@@ -430,6 +430,71 @@ class PairOnlyAndNeverGeneratedTests(unittest.TestCase):
             queued = {f"{row['function']}::{row['var']}" for row in out.g3_queue}
             self.assertIn(f"{miss.function}::{miss.var}", queued, msg=sorted(queued))
 
+    def test_commit_order_execution_window_in_top_n_among_settlement_internals(self):
+        """99136: Blind3 ranked settlement internals above commitOrder × executionWindow."""
+        miss = by_id("99136")
+        internals = (
+            "_applyLiquidationSettlementPlan",
+            "_settleProtocolFeeTopUp",
+            "settlementApplyCarryAndMark",
+            "settlementRealizeCarry",
+            "settlementSyncTotalSideMargin",
+            "settlementApplySideDelta",
+            "settlementConsumeTraderClaim",
+            "_applyRouterConfigAfterOracle",
+        )
+        publics = (
+            "commitOrder",
+            "executeOrder",
+            "settleLpEpoch",
+            "settleTraderClaim",
+            "assignUnassignedAssets",
+            "reconcile",
+            "addMargin",
+            "withdraw",
+        )
+        sinks = (
+            "sharePrice",
+            "totalSupply",
+            "freeSettlement",
+            "acceptedBasket",
+            "unassignedAssets",
+            "highWaterMark",
+            "vpiRebateReserve",
+            "pnlPledgeAssets",
+            "executionWindow",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = make_ctx(Path(tmp))
+            ctx.state.write_section(
+                2, "state_vocab", {"states": [{"var": name} for name in sinks]}
+            )
+            surfaces = [
+                {
+                    "file": "src/OrderRouter.sol",
+                    "line": i + 1,
+                    "name": name,
+                    "kind": "function",
+                    "entry": name in publics,
+                }
+                for i, name in enumerate(publics + internals)
+            ]
+            ctx.state.write_section(3, "ast_map", {"surfaces": surfaces})
+            out = never_generated_check(
+                ctx, NeverGeneratedInput(max_generate=80, max_queue=32)
+            )
+            queued = [f"{row['function']}::{row['var']}" for row in out.g3_queue]
+            token = f"{miss.function}::{miss.var}"
+            self.assertIn(token, queued, msg=queued)
+            self.assertTrue(
+                all(not row["function"].startswith("_") for row in out.g3_queue),
+                msg=queued,
+            )
+            self.assertTrue(
+                all(not row["function"].startswith("settlement") for row in out.g3_queue),
+                msg=queued,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -85,7 +85,7 @@ empty `run_battery` will create a synthetic `DIV-SEED-*` if none exists.
 | `run_battery` | `battery=vault/lifecycle/boundary`, `trigger`, `checks[]`. Empty vault checks load the default share-price families and seed hypotheses. | `batteries` |
 | `chain_hypotheses` | `nodes[]` with pre/post facts, `chains[]` with edges and sink | `chains` |
 | `seed_from_research` | optional `divergence_id`; intel + past audits + families → hypotheses; default `fill_never_generated` | `research_seeds` (+ `gap_fill`) |
-| `never_generated_check` | optional `divergence_id`, `max_generate`, `queue_g3` (default true), `max_queue` (default 32). Public/external mutators plus high-EV `_apply`/`_arm`/liquidat stems; ALL_CAPS constants dropped. Delay-bound vars (`executionWindow`, …) always injected. Mechanism templates name same-RC pairs. Auto-queues top-N distinguishing G3 tests. | `gap_fill` (+ Phase 5 `experiments`) |
+| `never_generated_check` | optional `divergence_id`, `max_generate`, `queue_g3` (default true), `max_queue` (default 32). Public/external mutators plus high-EV `_apply`/`_arm`/liquidat stems; ALL_CAPS constants dropped. Delay-bound vars (`executionWindow`, …) always injected. Mechanism templates name same-RC pairs. ABI entrypoints outrank `_` / `settlement*` helpers in the top-N G3 queue. | `gap_fill` (+ Phase 5 `experiments`) |
 
 ## Phase 5 — Experiment
 

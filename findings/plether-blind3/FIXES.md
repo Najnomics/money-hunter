@@ -23,6 +23,7 @@ Inventory of every unique paid finding Blind2 dropped (`origin/cursor/plether-bl
 | 14 | cartesian | Public/high-EV mutators (including `commit`/`reconcile`/`apply`/`assign`/`retry`/`evaluate`/`assess`/`renounce`/`arm` and high-EV `_` stems) × value sinks; mechanism templates name the same-RC; top-N auto-queue as distinguishing G3. |
 | 15 | G2 | Intel/PDF excerpt maps onto in-scope functions **or** family surfaces (HWM rounding → `assignUnassignedAssets`) before a wrong-protocol kill. |
 | 16 | never-generated | Always inject delay-bound vars (`executionWindow`, `minPublishTime`, `minDelay`, …) and family sink tokens, even when Phase 2 vocab is already long. |
+| 19 | cartesian rank | ABI entrypoints outrank `_` / `settlement*` helpers so `commitOrder × executionWindow` lands in top-N. |
 | 17 | G3 coverage | Happy-path/code-fact experiments do not count as tested. |
 | 18 | G4 freeze | A freeze-family G4 kill still requires the unreachable language to be treated as impact (reachability is a probe, not a disproof). |
 
@@ -94,7 +95,7 @@ Tests: `tests/test_plether_recall.py` (one case per miss) plus the existing `tes
 | 99663 | L | PAIR-ONLY | cartesian | dust min-notional unnamed | 14 | `test_pair_only_is_named_and_queued` |
 | 99931 | L | PAIR-ONLY | cartesian | `_arm` dropped | 14 | `test_pair_only_is_named_and_queued` |
 | 99933 | L | PAIR-ONLY | cartesian | partial close rebate unnamed | 14 | `test_pair_only_is_named_and_queued` |
-| 99136 | C | NEVER_GENERATED | vocab | No `executionWindow` var | 16 | `test_never_generated_execution_window` |
+| 99136 | C | NEVER_GENERATED | vocab + rank | No `executionWindow` var; Blind3 then buried `commitOrder × executionWindow` under settlement internals | 16, 19 | `test_never_generated_execution_window`, `test_commit_order_execution_window_in_top_n_among_settlement_internals` |
 
 ## Counts
 

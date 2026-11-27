@@ -13,7 +13,12 @@ from schemas.phase5 import CartesianQueueInput, RecordExperimentInput
 from schemas.phase6 import CheckResult, CoverageInput, DisproofCheck, DisproveInput
 from tests.helpers import make_ctx
 from tools.gate_policy import infer_experiment_class, is_freeze_value_flow
-from tools.hypothesis_seed import is_public_mutator, list_mutators
+from tools.hypothesis_seed import (
+    is_internal_helper,
+    is_public_mutator,
+    list_mutators,
+    pair_rank,
+)
 from tools.phase4_specialists import never_generated_check, seed_from_research
 from tools.phase5_sandbox import queue_cartesian_g3, record_experiment
 from tools.phase6_validate import coverage_check, disprove_finding
@@ -296,6 +301,28 @@ class PublicCartesianQueueTests(unittest.TestCase):
             self.assertEqual(len(experiments), len(out.g3_queue))
             self.assertTrue(all(e.get("experiment_class") == "distinguishing" for e in experiments))
             self.assertTrue(all("attacker" in e.get("observation", "").lower() or "distinguishing" in e.get("observation", "").lower() for e in experiments))
+
+    def test_public_entrypoint_outranks_settlement_internal(self):
+        public = pair_rank(
+            "commitOrder",
+            "executionWindow",
+            {"name": "commitOrder", "entry": True},
+        )
+        internal = pair_rank(
+            "_applyLiquidationSettlementPlan",
+            "sharePrice",
+            {"name": "_applyLiquidationSettlementPlan", "entry": False},
+        )
+        settlement = pair_rank(
+            "settlementApplyCarryAndMark",
+            "sharePrice",
+            {"name": "settlementApplyCarryAndMark", "entry": False},
+        )
+        self.assertTrue(is_internal_helper("_applyLiquidationSettlementPlan"))
+        self.assertTrue(is_internal_helper("settlementApplyCarryAndMark"))
+        self.assertFalse(is_internal_helper("commitOrder"))
+        self.assertGreater(public, internal)
+        self.assertGreater(public, settlement)
 
     def test_cartesian_action_does_not_execute(self):
         with tempfile.TemporaryDirectory() as tmp:

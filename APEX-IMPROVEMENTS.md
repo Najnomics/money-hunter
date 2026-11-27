@@ -122,7 +122,7 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 - `tests/test_coverage.py` — fail-closed vs mapped critical flow; missing self-check gap
 - `tests/test_intel_pdf.py` — bundled intel, PDF ingest, family seeding, default vault battery (no protocol-specific names)
 - `tests/test_never_generated.py` — cartesian fill, getters skipped, already-covered pairs skipped, `_` internals and constants dropped
-- `tests/test_recall_gates.py` — freeze-is-impact G4, distinguishing vs happy-path/code-fact G3, per-variant family kills, public cartesian G3 queue, excerpt→in-scope mapping before wrong-protocol kill
+- `tests/test_recall_gates.py` — freeze-is-impact G4, distinguishing vs happy-path/code-fact G3, per-variant family kills, public cartesian G3 queue, ABI-over-internal ranking, excerpt→in-scope mapping before wrong-protocol kill
 - `tests/test_plether_recall.py` — one regression per Blind2 miss (6 wrongly killed crits, highs 97628/97590, every other killed M/L, all 42 pair-only, never-generated 99136)
 - `tests/plether_misses.py` — catalog of the 63 drops (gate, locus, family, kill text)
 
@@ -141,7 +141,7 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 11. Overflow/revert that freezes a value flow is not a G4 'unreachable' kill.
 12. Gate 3 requires a distinguishing attack PoC; happy-path and code-fact are not pass/kill.
 13. Family G4 kills are per variant, not per family.
-14. Cartesian is public/external mutators × value sinks; top-N auto-queue as G3 tests.
+14. Cartesian is public/external mutators × value sinks; top-N auto-queue as G3 tests. ABI entrypoints outrank `_` / `settlement*` helpers (fix 19).
 15. Map intel/PDF excerpts to in-scope functions before a wrong-protocol kill.
 16. Always inject delay-bound value vars (`executionWindow`, `minPublishTime`, `minDelay`, …) and family sink tokens, even when Phase 2 vocab is already long. Rank `commit`/`reconcile`/`apply`/`assign`/`retry`/`evaluate`/`assess`/`renounce`/`arm` and high-EV `_` stems. Mechanism templates name the same-RC cartesian row (pledge-vs-redemption, watermark-rotation, unclamped-rebate, …) and G3-queue it.
 17. Happy-path / code-fact experiments are not coverage. `coverage_check` emits `GAP-DISTINGUISHING-*` and does not treat a G3 stall as tested.
@@ -164,3 +164,9 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 **Cause.** Blind2 G4 evidence said "supply unreachable; revert confirmed at uint max; astronomical". Fix 11's regex missed some of that phrasing, and a family-level overflow kill still threatened `settleLpEpoch` (99075) after `quoteDepositFromState` (98172).
 
 **Fix (this branch).** `UNREACHABLE_RE` / `FREEZE_HYP_RE` include the Blind2 phrases. Combined with fix 13, an overflow BLOCKS check survives (or is variant-scoped), never a family-wide disprove.
+
+## 19. ABI entrypoints outrank settlement internals in the G3 top-N
+
+**Cause.** Blind3 auto-queued `_applyLiquidationSettlementPlan`, `_settleProtocolFeeTopUp`, and `settlementApply*` because those names match high-EV stems (`apply`/`settle`) and pair templates. `commitOrder × executionWindow` (99136) was generated but missed the top-N.
+
+**Fix (this branch).** `pair_rank` adds `PUBLIC_ENTRY_BONUS` for non-helper ABI names and `INTERNAL_HELPER_PENALTY` for `_foo` and camelCase `settlementApply*` helpers. High-EV internals stay enumerable. Regression: `test_commit_order_execution_window_in_top_n_among_settlement_internals`.

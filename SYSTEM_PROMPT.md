@@ -192,7 +192,8 @@ Also use:
   each public/external state-changing function × each value-bearing state var
   (drop ALL_CAPS constants; keep high-EV `_apply`/`_arm`/liquidat stems; always
   inject delay-bound vars such as `executionWindow`). If no hypothesis touches
-  the pair, generate a mechanism-named one. Rank the cartesian and auto-queue
+  the pair, generate a mechanism-named one. Rank the cartesian so public/external
+  ABI entrypoints outrank `_` internals and `settlement*` helpers, then auto-queue
   the top-N pairs as distinguishing G3 tests. Coverage treats a skipped check
   as a high-EV gap.
 
