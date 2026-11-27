@@ -28,7 +28,7 @@ Inventory of every unique paid finding Blind2 dropped (`origin/cursor/plether-bl
 | 17 | G3 coverage | Happy-path/code-fact experiments do not count as tested. |
 | 18 | G4 freeze | A freeze-family G4 kill still requires the unreachable language to be treated as impact (reachability is a probe, not a disproof). |
 
-## Generic G3 harness improvements (SCORE-I / SCORE-J)
+## Generic G3 harness improvements (SCORE-I / SCORE-J / SCORE-K)
 
 Selected from `(function, var, family)` tokens only. No finding ids in the generic path. Each row has a unit test.
 
@@ -55,9 +55,13 @@ Selected from `(function, var, family)` tokens only. No finding ids in the gener
 | 39 | `g3_sequence.epoch_advance` — HWM/senior observe leftover recap without a deposit head | `test_hwm_reconcile_seeds_recap_and_takes_a_second_pass` | Recap residual that is masked when a matured deposit moves HWM on both pin and overlay |
 | 40 | `g3_poc_generator._act` — `settleLpEpoch × totalSupply` uses `_trySettleLpEpoch` | `test_settle_shareprice_emits_epoch_and_receipt_helpers` | Overflow freeze on settle that panics the internal helper before the convert assertion |
 | 41 | `g3_sequence.pending_recap` — settle/reconcile only, not assign | `test_assign_unassigned_emits_residual_seed` | Assign × HWM leftover that recap-seed turned into a no-op |
-| 42 | `G3Sequence._openAtFirstLegalMarkAt` + `drain_after_hedge` | `test_execute_open_degraded_closes_the_counterparty` | False-emergency admission into thin cash after a counterparty fill, at a searched mark and size |
+| 42 | `G3Sequence._openAtFirstLegalMarkAt` + `latch_after_search` | `test_execute_open_degraded_closes_the_counterparty` | False-emergency admission at a searched mark; drain/close the fill afterwards so E < L latches |
 | 43 | `g3_overlay.first_tick` — do not refresh an already-set mark | `test_accepted_basket_and_claim_use_family_overlays` | Calendar/config/basket prints that only move lastMark; overlay keeps the seed mark |
-| 44 | `g3_overlay` — `traderClaimBalance` uses `pending_order`; `claim_seed_live` | `test_accepted_basket_and_claim_use_family_overlays` | Commit/close vs standing claim leftover |
+| 44 | `g3_overlay` — `traderClaimBalance` uses `pending_order`; `claim_seed_live` before live fill | `test_accepted_basket_and_claim_use_family_overlays`, `test_close_claim_seeds_before_the_live_fill` | Commit/close vs standing claim leftover without TerminalNav hash desync |
+| 45 | `g3_poc_generator._act` — after searched-mark open, `_thinPoolTo(10_000e6)` then `_closeFilled(ATTACKER)` | `test_execute_open_degraded_closes_the_counterparty` | Admission that is legal only at a searched mark, then insolvency latch on the post-admission book |
+| 46 | `g3_poc_generator._act` — withdraw × rebate closes the skew-reducing fill then withdraws released backing | `test_rebate_var_asserts_reserve_not_junior_nav`, `test_withdraw_rebate_holds_a_skew_reducing_open` | Withdraw after rebate-backed close; overlay zeros VPI so the reserve never existed |
+| 47 | `g3_overlay.pending_order` — block commit/close while `traderClaimBalanceAssets > 0` | `test_accepted_basket_and_claim_use_family_overlays` | Standing claim vs queued/live intent; commit/close must not proceed on leftover claim |
+| 48 | `g3_overlay.assign_outstanding` — freeze leftover assign to senior as well as junior | `test_assign_outstanding_keeps_hwm_monotonic`, `test_assign_unassigned_emits_residual_seed` | Senior-side HWM assign of unowned residual |
 
 Tests: `tests/test_g3_sequence.py`, `tests/test_g3_poc_generator.py`, `tests/test_g3_overlay.py`, plus `tests/test_plether_recall.py` and `tests/test_recall_gates.py`.
 

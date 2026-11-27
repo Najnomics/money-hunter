@@ -75,6 +75,7 @@ class OverlaySelectionTests(unittest.TestCase):
         self.assertIn("nextHwm > state.waterfall.seniorHighWaterMark", src)
         self.assertIn("unassignedAssets = 0;", src)
         self.assertIn("pendingRecapitalizationAssets = 0;", src)
+        self.assertIn("if (toSenior || juniorPrincipal > 0)", src)
         self.assertIn("if (false && result.seniorProcessedEpochs == 0", src)
 
     def test_liquidation_reserve_uses_pending_order_overlay(self):
@@ -94,6 +95,8 @@ class OverlaySelectionTests(unittest.TestCase):
         )
         src = (ROOT / "tools" / "g3_overlay.py").read_text(encoding="utf-8")
         self.assertIn("if (lastMarkPrice == 0)", src)
+        self.assertIn("traderClaimBalanceAssets(address)", src)
+        self.assertIn("traderClaimBalanceAssets[account] > 0", src)
 
 
 if __name__ == "__main__":

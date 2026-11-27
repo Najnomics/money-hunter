@@ -28,6 +28,9 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_seedUnownedResidual", src)
         self.assertIn("pool.assignUnassignedAssets", src)
         self.assertNotIn("pool.accountExcess", src)
+        src_h = render_test("assignUnassignedAssets", "highWaterMark", "hwm-recap-accounting")
+        self.assertIn("pool.assignUnassignedAssets(true, ATTACKER)", src_h)
+        self.assertNotIn("_seedPendingRecap", src_h)
 
     def test_rebate_var_asserts_reserve_not_junior_nav(self):
         src = render_test("executeClose", "vpiRebateReserve", "refundable-receipt-in-nav")
@@ -37,8 +40,11 @@ class G3PocGeneratorTests(unittest.TestCase):
         src_w = render_test("withdraw", "vpiRebateReserve", "refundable-receipt-in-nav")
         self.assertIn("_openFilled(ATTACKER, _short()", src_w)
         self.assertIn("_snapshotRebate(ATTACKER)", src_w)
-        self.assertIn("_snapshotNav()", src_w)
-        self.assertIn("snapshotVictim", src_w)
+        self.assertIn("_closeFilled(ATTACKER)", src_w)
+        self.assertIn("rebate reserve was a no-op", src_w)
+        self.assertNotIn("_snapshotNav()", src_w)
+        self.assertLess(src_w.index("_snapshotRebate"), src_w.index("_closeFilled"))
+        self.assertLess(src_w.index("_closeFilled"), src_w.index("clearinghouse.withdraw"))
         src_o = render_test("executeOpen", "vpiRebateReserve", "refundable-receipt-in-nav")
         self.assertIn("_openFilled(VICTIM, _long()", src_o)
         self.assertIn("_short()", src_o)
@@ -81,6 +87,15 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_sweepUntilLiquidatable", src)
         self.assertNotIn('revert("no distinguishing assertion for this pair")', src)
 
+    def test_close_claim_seeds_before_the_live_fill(self):
+        src = render_test("executeClose", "traderClaimBalance", "delayed-order-optionality")
+        self.assertIn("_seedTraderClaim", src)
+        self.assertIn("_openFilled(ATTACKER, _long()", src)
+        self.assertLess(src.index("_seedTraderClaim"), src.index("_openFilled"))
+        src_c = render_test("commitOrder", "traderClaimBalance", "delayed-order-optionality")
+        self.assertIn("_seedTraderClaim", src_c)
+        self.assertIn("_commitAs", src_c)
+
     def test_settle_trader_claim_emits_claim_seed_and_pending_print(self):
         src = render_test("settleTraderClaim", "freeSettlement", "delayed-order-optionality")
         self.assertIn("_seedTraderClaim", src)
@@ -103,9 +118,12 @@ class G3PocGeneratorTests(unittest.TestCase):
         src = render_test("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("_openFilled(VICTIM, _short()", src)
         self.assertIn("_thinPool()", src)
-        self.assertIn("_thinPoolTo(40_000e6)", src)
         self.assertIn("_openAtFirstLegalMarkAt", src)
+        self.assertIn("_thinPoolTo(10_000e6)", src)
+        self.assertIn("_closeFilled(ATTACKER)", src)
         self.assertNotIn("_closeFilled(VICTIM)", src)
+        self.assertLess(src.index("_openAtFirstLegalMarkAt"), src.index("_thinPoolTo(10_000e6)"))
+        self.assertLess(src.index("_thinPoolTo(10_000e6)"), src.index("_closeFilled(ATTACKER)"))
 
     def test_settle_unassigned_does_not_queue_after_residual(self):
         src = render_test("settleLpEpoch", "unassignedAssets", "hwm-recap-accounting")
@@ -152,9 +170,9 @@ class G3PocGeneratorTests(unittest.TestCase):
         named, pair_only = blind_items()
         remaining_named = [i for i in NAMED_OPEN_IDS if i not in VERIFIED_IDS]
         self.assertEqual(len(named), len(NAMED_OPEN_IDS))
-        self.assertEqual(len(remaining_named), 6)
+        self.assertEqual(len(remaining_named), 0)
         self.assertEqual(len(pair_only), 25)
-        self.assertEqual(len(VERIFIED_IDS), 42)
+        self.assertEqual(len(VERIFIED_IDS), 56)
         src = GEN.read_text(encoding="utf-8")
         self.assertNotIn("findings/plether-key", src)
 

@@ -105,7 +105,7 @@ def _patches() -> dict[str, list[tuple[str, str, str]]]:
             (
                 "CfdEngine.sol",
                 "        if (pos.lots == 0) {\n            revert CfdEngine__NoOpenPosition();\n        }\n\n        bytes32 expectedOldHash = _beginTerminalCurveMutation(account);",
-                "        if (pos.lots == 0) {\n            revert CfdEngine__NoOpenPosition();\n        }\n        if (clearinghouse.orderMarginAssets(account) > 0) {\n            revert CfdEngine__Unauthorized();\n        }\n\n        bytes32 expectedOldHash = _beginTerminalCurveMutation(account);",
+                "        if (pos.lots == 0) {\n            revert CfdEngine__NoOpenPosition();\n        }\n        if (clearinghouse.orderMarginAssets(account) > 0) {\n            revert CfdEngine__Unauthorized();\n        }\n        if (traderClaimBalanceAssets[account] > 0) {\n            revert CfdEngine__Unauthorized();\n        }\n\n        bytes32 expectedOldHash = _beginTerminalCurveMutation(account);",
             ),
             (
                 "MarginClearinghouse.sol",
@@ -134,6 +134,14 @@ def _patches() -> dict[str, list[tuple[str, str, str]]]:
                 "        }\n"
                 "        if (IMarginClearinghouse(host.engine().clearinghouse()).orderMarginAssets(account) > 0) {\n"
                 "            revert OrderRouter__SettlementFloorOrderPending(0);\n"
+                "        }\n"
+                "        {\n"
+                "            (bool claimOk, bytes memory claimData) = address(host.engine()).staticcall(\n"
+                "                abi.encodeWithSignature(\"traderClaimBalanceAssets(address)\", account)\n"
+                "            );\n"
+                "            if (claimOk && claimData.length >= 32 && abi.decode(claimData, (uint256)) > 0) {\n"
+                "                revert OrderRouter__SettlementFloorOrderPending(0);\n"
+                "            }\n"
                 "        }\n\n"
                 "        _validateFreshRequest(host, account, request, enforceProtectionLock);",
             ),
@@ -202,7 +210,7 @@ def _patches() -> dict[str, list[tuple[str, str, str]]]:
                 "        if (shares == 0) {\n            revert HousePool__BootstrapSharesZero();\n        }\n\n        if (toSenior) {",
                 "        uint256 shares = ITrancheVaultBootstrap(targetVault).quoteBootstrapDeposit(amount);\n"
                 "        if (shares == 0) {\n            revert HousePool__BootstrapSharesZero();\n        }\n"
-                "        if (!toSenior && juniorPrincipal > 0) {\n            revert HousePool__NoUnassignedAssets();\n        }\n\n        if (toSenior) {",
+                "        if (toSenior || juniorPrincipal > 0) {\n            revert HousePool__NoUnassignedAssets();\n        }\n\n        if (toSenior) {",
             ),
             (
                 "HousePool.sol",

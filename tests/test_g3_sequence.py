@@ -49,8 +49,7 @@ class SequenceSelectionTests(unittest.TestCase):
         src = setup_block("withdraw", "vpiRebateReserve", "refundable-receipt-in-nav")
         self.assertIn("_openFilled(VICTIM", src)
         self.assertIn("_openFilled(ATTACKER, _short()", src)
-        self.assertIn("_commitClose(ATTACKER)", src)
-        self.assertLess(src.index("_openFilled(ATTACKER, _short()"), src.index("_commitClose"))
+        self.assertNotIn("_commitClose(ATTACKER)", src)
 
     def test_execute_open_rebate_seeds_opposite_skew(self):
         chosen = select_strategies("executeOpen", "vpiRebateReserve", "refundable-receipt-in-nav")
@@ -130,16 +129,13 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("thin_pool", chosen)
         self.assertIn("counterparty_open", chosen)
         self.assertIn("legal_mark_search", chosen)
-        self.assertIn("drain_after_hedge", chosen)
+        self.assertIn("latch_after_search", chosen)
         self.assertNotIn("drain_cash", chosen)
         self.assertNotIn("multi_actor_hedge", chosen)
         src = setup_block("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("_thinPool();", src)
         self.assertIn("_openFilled(VICTIM, _short()", src)
-        self.assertIn("_thinPoolTo(40_000e6)", src)
         self.assertNotIn("_publish(1.5e8)", src)
-        self.assertNotIn("_thinPoolTo(10_000e6)", src)
-        self.assertLess(src.index("_openFilled(VICTIM, _short()"), src.index("_thinPoolTo(40_000e6)"))
 
     def test_liquidation_freesettlement_sweeps_until_unsafe(self):
         chosen = select_strategies(

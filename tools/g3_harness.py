@@ -38,7 +38,7 @@ NAMED_OPEN_IDS: tuple[str, ...] = (
     "99136",
 )
 
-# Honest SCORE-B: exact test PASSed on a82d4fe and FAILed on the local patch.
+# Honest SCORE-K: exact test PASSed on a82d4fe and FAILed on the family overlay.
 VERIFIED_IDS: frozenset[str] = frozenset(
     {
         "97906", "98172", "97628", "99136",
@@ -56,6 +56,10 @@ VERIFIED_IDS: frozenset[str] = frozenset(
         "97844", "99735",
         "99756", "97881",
         "97649", "97836", "98795",
+        "99075", "97715", "98961", "99470",
+        "97605", "99795",
+        "98014", "98416", "97601", "97602", "98762", "99422",
+        "100087", "99551",
     }
 )
 

@@ -170,7 +170,7 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:unowned_residual — Write leftover into the unassigned bucket after the deposit is queued. Minting it before requestDeposit freezes the vault; accountExcess after a matured head consumes the epoch.
         _seedUnownedResidual(1e6);
         _snapshotHwm();
-        pool.assignUnassignedAssets(false, ATTACKER);
+        pool.assignUnassignedAssets(true, ATTACKER);
         require(
             pool.seniorHighWaterMark() != snapshotHwm
                 || pool.pendingRecapitalizationAssets() > 0,
@@ -276,27 +276,23 @@ contract ApexG3GeneratedTest is G3Sequence {
         _thinPool();
         // strategy:counterparty_open — Admission backing is revealed when an opposite-side winner already exists. A lone open into thin cash does not latch degradedMode.
         _openFilled(VICTIM, _short(), 60);
-        // strategy:drain_after_hedge — After the counterparty fill, drain remaining cash so a searched-mark open spends backing already owed to the winner.
-        _thinPoolTo(40_000e6);
         // strategy:legal_mark_search — A hardcoded seed or 1.5x print is often skew-illegal after a counterparty fill. Search marks until executeOpen admits, then close the winner.
+        // strategy:latch_after_search — Draining before admission trips solvency-exceeded. Fill at a searched mark first, then drain and close that fill so E < L latches afterwards.
         _openAtFirstLegalMarkAt(ATTACKER, _long(), 12_000e18, 4_000e6);
+        _thinPoolTo(10_000e6);
+        _closeFilled(ATTACKER);
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 
     function test_attack_withdraw_vpiRebateReserve() public {
         // strategy:rebate_held — Close/withdraw rebate probes need an already-locked negative-VPI reserve from a skew-reducing open, not a lone long.
         _openFilled(VICTIM, _long(), 60); _openFilled(ATTACKER, _short(), 60);
-        // strategy:pending_close — A live rebate reserve is still locked while the position is open. Commit a close first so withdraw can waive or release that backing.
-        _commitClose(ATTACKER);
+        // strategy:pending_close — A live rebate reserve is still locked while the position is open. Close the skew-reducing fill in the act, then withdraw the released backing.
         _snapshotRebate(ATTACKER);
-        _snapshotNav();
+        _closeFilled(ATTACKER);
         uint256 free = _freeOf(ATTACKER);
         if (free > 0) { vm.prank(ATTACKER); clearinghouse.withdraw(ATTACKER, free); }
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(
-            _rebateOf(ATTACKER) != snapshotRebate || victimAfter != snapshotVictim,
-            "withdraw left rebate backing and incumbent NAV unchanged"
-        );
+        require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");
     }
 
     function test_attack_commitOrder_executionWindow() public {
@@ -320,10 +316,10 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_executeClose_traderClaimBalance() public {
+        // strategy:claim_seed_live — Commit/close vs claim probes need a standing claim leftover, not only live-position lock. Seed before a live fill so the terminal book hash includes the leftover.
+        _seedTraderClaim(ATTACKER, 1e6);
         // strategy:filled_position — Close/margin probes need a live filled position, not an empty book.
         _openFilled(ATTACKER, _long(), 60);
-        // strategy:claim_seed_live — Commit/close vs claim probes need a standing claim leftover, not only live-position lock.
-        _seedTraderClaim(ATTACKER, 1e6);
         _snapshotFree(ATTACKER);
         _closeFilled(ATTACKER);
         require(_freeOf(ATTACKER) != snapshotFree, "trader claim/free path was a no-op");
@@ -462,7 +458,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_commitOrder_traderClaimBalance() public {
-        // strategy:claim_seed_live — Commit/close vs claim probes need a standing claim leftover, not only live-position lock.
+        // strategy:claim_seed_live — Commit/close vs claim probes need a standing claim leftover, not only live-position lock. Seed before a live fill so the terminal book hash includes the leftover.
         _seedTraderClaim(ATTACKER, 1e6);
         _snapshotFree(ATTACKER);
         _commitAs(ATTACKER, _openReq("c", _long(), 60));

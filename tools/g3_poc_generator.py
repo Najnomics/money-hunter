@@ -47,7 +47,8 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             return "        _trySettleLpEpoch();"
         return "        _settleLpEpochForTest();"
     if fn == "assignUnassignedAssets":
-        return "        pool.assignUnassignedAssets(false, ATTACKER);"
+        to_senior = "true" if var == "highWaterMark" else "false"
+        return f"        pool.assignUnassignedAssets({to_senior}, ATTACKER);"
     if fn == "addMargin":
         return "        vm.prank(ATTACKER);\n        engine.addMargin(ATTACKER, 1e6);"
     if fn == "commitOrder":
@@ -74,7 +75,13 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
                 "        );"
             )
         if "legal_mark_search" in strategies:
-            return "        _openAtFirstLegalMarkAt(ATTACKER, _long(), 12_000e18, 4_000e6);"
+            body = "        _openAtFirstLegalMarkAt(ATTACKER, _long(), 12_000e18, 4_000e6);"
+            if "latch_after_search" in strategies:
+                body += (
+                    "\n        _thinPoolTo(10_000e6);\n"
+                    "        _closeFilled(ATTACKER);"
+                )
+            return body
         side = "_short()" if "skew_seed" in strategies else "_long()"
         body = (
             f'        uint64 oid = _commitAs(ATTACKER, _openReq("x", {side}, 60));\n'
@@ -98,9 +105,13 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             "returns (uint256) {} catch {}"
         )
     if fn in {"withdraw", "withdrawMargin"}:
+        prefix = ""
+        if var == "vpiRebateReserve":
+            prefix = "        _closeFilled(ATTACKER);\n"
         return (
-            "        uint256 free = _freeOf(ATTACKER);\n"
-            "        if (free > 0) { vm.prank(ATTACKER); clearinghouse.withdraw(ATTACKER, free); }"
+            prefix
+            + "        uint256 free = _freeOf(ATTACKER);\n"
+            + "        if (free > 0) { vm.prank(ATTACKER); clearinghouse.withdraw(ATTACKER, free); }"
         )
     if fn == "accountExcess":
         return "        try pool.accountExcess() {} catch {}"
@@ -162,14 +173,6 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
             "        } catch {}"
         )
     if var == "vpiRebateReserve":
-        if function == "withdraw":
-            return (
-                "        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));\n"
-                "        require(\n"
-                "            _rebateOf(ATTACKER) != snapshotRebate || victimAfter != snapshotVictim,\n"
-                '            "withdraw left rebate backing and incumbent NAV unchanged"\n'
-                "        );"
-            )
         return (
             '        require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");'
         )
@@ -271,8 +274,6 @@ def render_test(function: str, var: str, family: str = "") -> str:
     snap = ""
     if var == "vpiRebateReserve":
         snap = "        _snapshotRebate(ATTACKER);"
-        if function == "withdraw":
-            snap += "\n        _snapshotNav();"
     if var in {"sharePrice", "nav", "totalAssets", "pnlPledgeAssets"}:
         snap = "        _snapshotNav();"
     if var in {"seniorPrincipal", "highWaterMark"} and "second_pass" not in strategies:

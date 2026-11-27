@@ -74,6 +74,17 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
+        id="claim_seed_live",
+        when_fn=_re(r"commitOrder|executeClose"),
+        when_var=_re(r"traderClaim"),
+        when_family=frozenset(),
+        setup="_seedTraderClaim(ATTACKER, 1e6);",
+        why=(
+            "Commit/close vs claim probes need a standing claim leftover, not only live-position lock. "
+            "Seed before a live fill so the terminal book hash includes the leftover."
+        ),
+    ),
+    SequenceStrategy(
         id="filled_position",
         when_fn=_re(r"executeClose|retryPosition|withdraw"),
         when_var=_re(r"sharePrice|traderClaim|freeSettlement|liquidationReserve"),
@@ -99,14 +110,6 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
             "settleTraderClaim reverts with an empty claim bucket. Seed leftover "
             "into the standing claim before the mutator."
         ),
-    ),
-    SequenceStrategy(
-        id="claim_seed_live",
-        when_fn=_re(r"commitOrder|executeClose"),
-        when_var=_re(r"traderClaim"),
-        when_family=frozenset(),
-        setup="_seedTraderClaim(ATTACKER, 1e6);",
-        why="Commit/close vs claim probes need a standing claim leftover, not only live-position lock.",
     ),
     SequenceStrategy(
         id="pending_recap",
@@ -158,10 +161,10 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         when_fn=_re(r"withdraw"),
         when_var=_re(r"rebate"),
         when_family=frozenset(),
-        setup="_commitClose(ATTACKER);",
+        setup="",
         why=(
             "A live rebate reserve is still locked while the position is open. "
-            "Commit a close first so withdraw can waive or release that backing."
+            "Close the skew-reducing fill in the act, then withdraw the released backing."
         ),
     ),
     SequenceStrategy(
@@ -187,17 +190,6 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
-        id="drain_after_hedge",
-        when_fn=_re(r"executeOpen"),
-        when_var=_re(r"degradedMode|emergency"),
-        when_family=frozenset({"false-emergency-mode"}),
-        setup="_thinPoolTo(40_000e6);",
-        why=(
-            "After the counterparty fill, drain remaining cash so a searched-mark "
-            "open spends backing already owed to the winner."
-        ),
-    ),
-    SequenceStrategy(
         id="legal_mark_search",
         when_fn=_re(r"executeOpen"),
         when_var=_re(r"degradedMode|emergency"),
@@ -206,6 +198,17 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         why=(
             "A hardcoded seed or 1.5x print is often skew-illegal after a counterparty "
             "fill. Search marks until executeOpen admits, then close the winner."
+        ),
+    ),
+    SequenceStrategy(
+        id="latch_after_search",
+        when_fn=_re(r"executeOpen"),
+        when_var=_re(r"degradedMode|emergency"),
+        when_family=frozenset({"false-emergency-mode"}),
+        setup="",
+        why=(
+            "Draining before admission trips solvency-exceeded. Fill at a searched "
+            "mark first, then drain and close that fill so E < L latches afterwards."
         ),
     ),
     SequenceStrategy(
