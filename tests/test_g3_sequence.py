@@ -47,12 +47,15 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("thin_pool", chosen)
         self.assertIn("multi_actor_hedge", chosen)
         self.assertIn("oracle_price_move", chosen)
+        self.assertIn("drain_cash", chosen)
         src = setup_block("executeClose", "degradedMode", "false-emergency-mode")
         self.assertIn("_thinPool", src)
+        self.assertIn("_thinPoolTo(10_000e6)", src)
         self.assertIn("_openFilled(ATTACKER", src)
         self.assertIn("_openFilled(VICTIM", src)
         self.assertIn("_publish(1.5e8)", src)
         self.assertLess(src.index("_thinPool"), src.index("_openFilled"))
+        self.assertLess(src.index("_openFilled"), src.index("_thinPoolTo"))
 
     def test_random_deposit_total_supply_is_not_a_hedge_sequence(self):
         chosen = select_strategies("deposit", "totalSupply", "")
@@ -65,7 +68,7 @@ class SequenceSelectionTests(unittest.TestCase):
             self.assertNotIn(finding, src)
 
     def test_every_strategy_has_a_why(self):
-        self.assertGreaterEqual(len(STRATEGIES), 11)
+        self.assertGreaterEqual(len(STRATEGIES), 12)
         for strat in STRATEGIES:
             self.assertTrue(strat.why.strip())
 

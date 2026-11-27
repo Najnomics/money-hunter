@@ -38,6 +38,7 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_openFilled(ATTACKER", src)
         self.assertIn("_openFilled(VICTIM", src)
         self.assertIn("_thinPool", src)
+        self.assertIn("_thinPoolTo(10_000e6)", src)
         self.assertIn("_publish(1.5e8)", src)
         self.assertIn("_closeFilled", src)
         self.assertIn("degradedMode", src)

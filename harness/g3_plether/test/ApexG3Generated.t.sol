@@ -44,6 +44,8 @@ contract ApexG3GeneratedTest is G3Sequence {
         _openFilled(ATTACKER, _long(), 60); _openFilled(VICTIM, _short(), 60);
         // strategy:oracle_price_move — Close/execute after a material mark move, not at the seed price.
         _publish(1.5e8);
+        // strategy:drain_cash — After the hedge is open, drain pool cash well below one-side maxProfit. A close that credits the pool still leaves cash < remaining maxLiability.
+        _thinPoolTo(10_000e6);
         _closeFilled(ATTACKER);
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }

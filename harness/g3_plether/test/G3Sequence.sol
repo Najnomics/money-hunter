@@ -24,7 +24,7 @@ abstract contract G3Sequence is BasePerpTest {
     function _riskParams() internal pure override returns (CfdTypes.RiskParams memory) {
         return CfdTypes.RiskParams({
             vpiFactor: 0.01e18,
-            maxSkewRatio: 0.4e18,
+            maxSkewRatio: 1e18,
             maintMarginBps: 100,
             initMarginBps: 150,
             fadMarginBps: 300,
@@ -142,9 +142,11 @@ abstract contract G3Sequence is BasePerpTest {
     }
 
     function _thinPool() internal {
-        // 1M junior >> one-side maxProfit (~50k), so a hedge close cannot trip
-        // effectiveAssets < maxLiability. Keep cash just above the envelope.
-        uint256 keep = 70_000e6;
+        // Enough cash to open a 50k hedge under maxSkew=1, not the 1M junior buffer.
+        _thinPoolTo(70_000e6);
+    }
+
+    function _thinPoolTo(uint256 keep) internal {
         uint256 raw = settlementToken.balanceOf(address(pool));
         if (raw > keep) {
             settlementToken.burn(address(pool), raw - keep);

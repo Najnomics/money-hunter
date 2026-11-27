@@ -94,6 +94,17 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         why="Close/execute after a material mark move, not at the seed price.",
     ),
     SequenceStrategy(
+        id="drain_cash",
+        when_fn=_re(r"executeClose|executeOrder"),
+        when_var=_re(r"degradedMode|emergency"),
+        when_family=frozenset({"false-emergency-mode"}),
+        setup="_thinPoolTo(10_000e6);",
+        why=(
+            "After the hedge is open, drain pool cash well below one-side maxProfit. "
+            "A close that credits the pool still leaves cash < remaining maxLiability."
+        ),
+    ),
+    SequenceStrategy(
         id="price_print_then_mutate",
         when_fn=_re(r"addMargin|withdraw|execute|commit"),
         when_var=_re(r"freeSettlement|freeBalance|executionWindow"),
