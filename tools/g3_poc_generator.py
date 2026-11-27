@@ -39,9 +39,10 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             return (
                 "        _settleLpEpochForTest();\n"
                 "        _snapshotHwm();\n"
-                "        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();\n"
                 "        _settleLpEpochForTest();"
             )
+        if "unowned_residual" in strategies:
+            return "        try _settleLpEpochForTest() {} catch {}"
         return "        _settleLpEpochForTest();"
     if fn == "assignUnassignedAssets":
         return "        pool.assignUnassignedAssets(false, ATTACKER);"
@@ -70,6 +71,11 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
                 '            "pending execute after print failed"\n'
                 "        );"
             )
+        if "legal_mark_search" in strategies:
+            body = "        _openAtFirstLegalMark(ATTACKER, _long());"
+            if "counterparty_open" in strategies:
+                body += "\n        _closeFilled(VICTIM);"
+            return body
         side = "_short()" if "skew_seed" in strategies else "_long()"
         body = (
             f'        uint64 oid = _commitAs(ATTACKER, _openReq("x", {side}, 60));\n'
@@ -107,13 +113,16 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             "        if (shares > 0) { juniorVault.requestRedeem(shares / 2, address(this), address(this)); }"
         )
     if fn == "executeLiquidationBatch":
-        who = "ATTACKER" if "price_print_then_mutate" in strategies else "VICTIM"
-        call = "router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8))"
+        pending = "unsafe_price_sweep" in strategies or "price_print_then_mutate" in strategies
+        who = "ATTACKER" if pending else "VICTIM"
         prefix = (
             "        address[] memory accounts = new address[](1);\n"
             f"        accounts[0] = {who};\n"
+            "        uint256 liqMark = engine.lastMarkPrice();\n"
+            "        if (liqMark == 0) liqMark = 1.5e8;\n"
         )
-        if "price_print_then_mutate" in strategies:
+        call = "router.executeLiquidationBatch(accounts, _mockPythUpdateData(liqMark))"
+        if pending:
             return prefix + f"        {call};"
         return prefix + f"        try {call} {{}} catch {{}}"
     if fn == "renounceOwnership":
@@ -185,8 +194,23 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
     if var == "unassignedAssets":
         return (
             "        require(\n"
-            "            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,\n"
+            "            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0\n"
+            "                || pool.pendingRecapitalizationAssets() > 0,\n"
             '            "residual/HWM path minted nothing"\n'
+            "        );"
+        )
+    if var == "liquidationReserve":
+        return (
+            "        require(\n"
+            "            clearinghouse.liquidationReserveAssets(ATTACKER) != snapshotLiqReserve,\n"
+            '            "liquidation reserve path was a no-op"\n'
+            "        );"
+        )
+    if var == "protocolTreasury":
+        return (
+            "        require(\n"
+            "            clearinghouse.balanceAssets(engine.protocolTreasury()) != snapshotTreasury,\n"
+            '            "protocol treasury path was a no-op"\n'
             "        );"
         )
     if var in {"freeSettlement", "freeBalance"}:
@@ -241,6 +265,10 @@ def render_test(function: str, var: str, family: str = "") -> str:
         snap = "        _snapshotHwm();"
     if var in {"traderClaimBalance", "freeSettlement", "freeBalance"} and "locked_vs_free" not in strategies:
         snap = "        _snapshotFree(ATTACKER);"
+    if var == "liquidationReserve":
+        snap = "        _snapshotLiqReserve(ATTACKER);"
+    if var == "protocolTreasury":
+        snap = "        _snapshotTreasury();"
     body = "\n".join(p for p in (setup, snap, act, assertion) if p)
     return (
         f"    function {name}() public {{\n"

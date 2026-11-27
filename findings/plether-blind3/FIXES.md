@@ -28,7 +28,7 @@ Inventory of every unique paid finding Blind2 dropped (`origin/cursor/plether-bl
 | 17 | G3 coverage | Happy-path/code-fact experiments do not count as tested. |
 | 18 | G4 freeze | A freeze-family G4 kill still requires the unreachable language to be treated as impact (reachability is a probe, not a disproof). |
 
-## Generic G3 harness improvements (SCORE-I)
+## Generic G3 harness improvements (SCORE-I / SCORE-J)
 
 Selected from `(function, var, family)` tokens only. No finding ids in the generic path. Each row has a unit test.
 
@@ -46,6 +46,12 @@ Selected from `(function, var, family)` tokens only. No finding ids in the gener
 | 30 | `g3_overlay.assign_outstanding` — HWM only increases | `test_assign_outstanding_keeps_hwm_monotonic` | Repeated reconcile that erases a senior recovery watermark |
 | 31 | `g3_sequence.counterparty_open` + close the winner after executeOpen | `test_execute_open_degraded_closes_the_counterparty` | Admission that spends cash already owed to an opposite-side winner |
 | 32 | `g3_harness.run_distinguishing` — `--match-contract ApexG3` | `test_harness_matches_g3_contracts_not_a_glob_path` | Forge versions that drop `test/apex_g3/*` globs and report no tests |
+| 33 | `g3_sequence.second_epoch` — queue+warp a second matured head *before* leftover residual | `test_settle_unassigned_seeds_unowned_residual`, `test_hwm_reconcile_seeds_recap_and_takes_a_second_pass`, `test_settle_unassigned_does_not_queue_after_residual` | LP-epoch freeze when residual remaining blocks `requestDeposit` on a second observation |
+| 34 | `g3_poc_generator._act` — second LP observation settles the pre-queued head; no mid-queue | `test_hwm_reconcile_emits_second_pass_and_hwm_snapshot` | Non-idempotent HWM/senior overwrite after recap residual is already live |
+| 35 | `g3_overlay.assign_outstanding` — epoch settle consumes leftover residual and does not freeze no-progress | `test_assign_outstanding_keeps_hwm_monotonic` | Residual that reserves free cash / blocks deposit processing on every `settleLpEpoch` |
+| 36 | `G3Sequence._openThinFilled` + `_sweepUntilLiquidatable` + `unsafe_price_sweep` | `test_liquidation_freesettlement_sweeps_until_unsafe`, `test_sequence_helpers_search_marks_and_sweep_liquidation` | Liquidation cleanup that only fires when a live position is actually unsafe, not at a fixed 1.5x mark |
+| 37 | `G3Sequence._openAtFirstLegalMark` + `legal_mark_search` | `test_execute_open_degraded_closes_the_counterparty`, `test_sequence_helpers_search_marks_and_sweep_liquidation` | Admission / false-emergency probes that are skew-illegal at the seed mark or a hardcoded shock |
+| 38 | `g3_poc_generator._assert` — `liquidationReserve` / `protocolTreasury` snapshots | `test_execute_liquidation_reserve_asserts_bucket_move` | Pair-only reserve/treasury sinks that previously had no distinguishing assertion |
 
 Tests: `tests/test_g3_sequence.py`, `tests/test_g3_poc_generator.py`, `tests/test_g3_overlay.py`, plus `tests/test_plether_recall.py` and `tests/test_recall_gates.py`.
 

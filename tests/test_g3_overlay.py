@@ -71,6 +71,15 @@ class OverlaySelectionTests(unittest.TestCase):
         src = (ROOT / "tools" / "g3_overlay.py").read_text(encoding="utf-8")
         self.assertIn("HousePoolPendingPreviewLib.sol", src)
         self.assertIn("nextHwm > state.waterfall.seniorHighWaterMark", src)
+        self.assertIn("unassignedAssets = 0;", src)
+        self.assertIn("pendingRecapitalizationAssets = 0;", src)
+        self.assertIn("if (false && result.seniorProcessedEpochs == 0", src)
+
+    def test_liquidation_reserve_uses_pending_order_overlay(self):
+        self.assertEqual(
+            overlay_id("executeLiquidationBatch", "liquidationReserve", "delayed-order-optionality"),
+            "pending_order",
+        )
 
 
 if __name__ == "__main__":

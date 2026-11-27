@@ -22,6 +22,8 @@ abstract contract G3Sequence is BasePerpTest {
     uint256 internal snapshotRebate;
     uint256 internal snapshotHwm;
     uint256 internal snapshotSenior;
+    uint256 internal snapshotLiqReserve;
+    uint256 internal snapshotTreasury;
     uint256 internal lastDepositRequest;
     uint256 internal openNonce;
     uint64 internal lastCommitId;
@@ -61,10 +63,20 @@ abstract contract G3Sequence is BasePerpTest {
         CfdTypes.Side side,
         uint32 window
     ) internal view returns (OrderV3Types.OrderRequest memory request) {
+        return _openReqAt(clientOrderId, side, window, 50_000e18, 50_000e6);
+    }
+
+    function _openReqAt(
+        bytes32 clientOrderId,
+        CfdTypes.Side side,
+        uint32 window,
+        uint256 sizeDelta,
+        uint256 marginDelta
+    ) internal view returns (OrderV3Types.OrderRequest memory request) {
         request.clientOrderId = clientOrderId;
         request.side = side;
-        request.sizeDelta = 50_000e18;
-        request.marginDelta = 50_000e6;
+        request.sizeDelta = sizeDelta;
+        request.marginDelta = marginDelta;
         request.targetPrice = (side == CfdTypes.Side.LONG) ? 1 : type(uint256).max;
         request.isClose = false;
         request.bounds = OrderV3Types.ExecutionBounds({
@@ -93,6 +105,63 @@ abstract contract G3Sequence is BasePerpTest {
         openNonce += 1;
         oid = _commitAs(who, _openReq(bytes32(openNonce ^ uint256(uint160(who))), side, window));
         router.executeOrder(oid, _mockPythUpdateData(1e8));
+    }
+
+    function _openThinFilled(address who, CfdTypes.Side side, uint32 window) internal returns (uint64 oid) {
+        // Well-margined 50k/50k canaries stay solvent at a 1.5x print. A thin
+        // margin makes some mark in the sweep actually unsafe.
+        openNonce += 1;
+        oid = _commitAs(who, _openReqAt(bytes32(openNonce ^ uint256(uint160(who))), side, window, 50_000e18, 2_000e6));
+        router.executeOrder(oid, _mockPythUpdateData(1e8));
+    }
+
+    function _sweepUntilLiquidatable(address who) internal {
+        uint256[12] memory marks;
+        marks[0] = 1.02e8;
+        marks[1] = 1.05e8;
+        marks[2] = 1.10e8;
+        marks[3] = 1.20e8;
+        marks[4] = 1.50e8;
+        marks[5] = 2e8;
+        marks[6] = 5e8;
+        marks[7] = 10e8;
+        marks[8] = 0.98e8;
+        marks[9] = 0.90e8;
+        marks[10] = 0.50e8;
+        marks[11] = 0.10e8;
+        uint256 depth = pool.totalAssets();
+        for (uint256 i = 0; i < marks.length; ++i) {
+            if (engineLens.isLiquidatableAt(who, marks[i], depth)) {
+                _publish(marks[i]);
+                return;
+            }
+        }
+        _publish(marks[4]);
+    }
+
+    function _openAtFirstLegalMark(address who, CfdTypes.Side side) internal returns (uint64 oid) {
+        uint256[8] memory marks;
+        marks[0] = 1.02e8;
+        marks[1] = 1.05e8;
+        marks[2] = 1.08e8;
+        marks[3] = 1.10e8;
+        marks[4] = 1.15e8;
+        marks[5] = 1.20e8;
+        marks[6] = 1.30e8;
+        marks[7] = 1e8;
+        for (uint256 i = 0; i < marks.length; ++i) {
+            _publish(marks[i]);
+            openNonce += 1;
+            oid = _commitAs(who, _openReq(bytes32(openNonce ^ uint256(uint160(who))), side, 60));
+            try router.executeOrder(oid, _mockPythUpdateData(marks[i])) returns (
+                OrderV3Types.ExecutionResult memory result
+            ) {
+                if (uint8(result.status) == uint8(OrderV3Types.LifecycleStatus.Executed)) {
+                    return oid;
+                }
+            } catch {}
+        }
+        revert("open admission found no legal mark");
     }
 
     function _queueDeposit(address lp, uint256 amount) internal returns (uint256 requestId) {
@@ -148,6 +217,14 @@ abstract contract G3Sequence is BasePerpTest {
     function _snapshotHwm() internal {
         snapshotHwm = pool.seniorHighWaterMark();
         snapshotSenior = pool.seniorPrincipal();
+    }
+
+    function _snapshotLiqReserve(address who) internal {
+        snapshotLiqReserve = clearinghouse.liquidationReserveAssets(who);
+    }
+
+    function _snapshotTreasury() internal {
+        snapshotTreasury = clearinghouse.balanceAssets(engine.protocolTreasury());
     }
 
     function _seedTraderClaim(address who, uint256 amount) internal {

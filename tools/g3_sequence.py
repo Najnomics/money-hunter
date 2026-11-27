@@ -31,7 +31,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     SequenceStrategy(
         id="receipt_open",
         when_fn=_re(r"settle|reconcile"),
-        when_var=_re(r"sharePrice|totalAssets|\bnav\b|rebate|accrued|pledge"),
+        when_var=_re(r"sharePrice|totalAssets|\bnav\b|rebate|accrued|pledge|protocolTreasury"),
         when_family=frozenset({"refundable-receipt-in-nav"}),
         setup="_openFilled(ATTACKER, _long(), 60);",
         why=(
@@ -48,6 +48,17 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         why=(
             "settle/epoch reverts with no matured head (NoLpEpochProgress). "
             "Queue a pending deposit and warp to its epoch before the mutator."
+        ),
+    ),
+    SequenceStrategy(
+        id="second_epoch",
+        when_fn=_re(r"settleLp|epoch|reconcile"),
+        when_var=_re(r"highWaterMark|seniorPrincipal|unassigned"),
+        when_family=frozenset({"hwm-recap-accounting"}),
+        setup="_queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();",
+        why=(
+            "A leftover residual freezes the next requestDeposit. Queue a second "
+            "matured epoch before seeding residual so a later observation still has a head."
         ),
     ),
     SequenceStrategy(
@@ -69,6 +80,14 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         when_family=frozenset(),
         setup="_openFilled(ATTACKER, _long(), 60);",
         why="Close/margin probes need a live filled position, not an empty book.",
+    ),
+    SequenceStrategy(
+        id="reserve_open",
+        when_fn=_re(r"applyOpen"),
+        when_var=_re(r"liquidationReserve"),
+        when_family=frozenset(),
+        setup="_openFilled(ATTACKER, _long(), 60);",
+        why="Open-path liquidation-reserve probes need a live filled account to reprice the bucket.",
     ),
     SequenceStrategy(
         id="claim_seed",
@@ -100,7 +119,8 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         setup="",
         why=(
             "HWM/recap overwrite is a second observation of the same books, "
-            "not the first solvent epoch."
+            "not the first solvent epoch. The second matured head is queued in "
+            "second_epoch before residual; do not requestDeposit after leftover is live."
         ),
     ),
     SequenceStrategy(
@@ -159,6 +179,17 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
+        id="legal_mark_search",
+        when_fn=_re(r"executeOpen"),
+        when_var=_re(r"degradedMode|emergency"),
+        when_family=frozenset({"false-emergency-mode"}),
+        setup="",
+        why=(
+            "A hardcoded seed or 1.5x print is often skew-illegal after a counterparty "
+            "fill. Search marks until executeOpen admits, then close the winner."
+        ),
+    ),
+    SequenceStrategy(
         id="multi_actor_hedge",
         when_fn=_re(r"executeClose"),
         when_var=_re(r"degradedMode|emergency|frozen"),
@@ -190,13 +221,25 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="price_print_then_mutate",
-        when_fn=_re(r"addMargin|withdraw|execute|commit|assess|evaluate"),
+        when_fn=_re(r"addMargin|withdraw|executeOrder|commit|assess|evaluate"),
         when_var=_re(r"freeSettlement|freeBalance|executionWindow"),
         when_family=frozenset({"delayed-order-optionality"}),
         setup='_openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);',
         why=(
             "Delayed-order optionality is after the fill price is public. "
-            "Commit, publish, then snapshot free and mutate."
+            "Commit, publish, then snapshot free and mutate. Liquidation uses "
+            "unsafe_price_sweep instead of a fixed mark."
+        ),
+    ),
+    SequenceStrategy(
+        id="unsafe_price_sweep",
+        when_fn=_re(r"executeLiquidation"),
+        when_var=_re(r"freeSettlement|freeBalance|liquidationReserve"),
+        when_family=frozenset({"delayed-order-optionality"}),
+        setup='_openThinFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReqAt("q", _long(), 60, 1_000e18, 100e6)); _sweepUntilLiquidatable(ATTACKER);',
+        why=(
+            "Liquidation cleanup only voids a queued open if the live position is "
+            "actually unsafe. Sweep marks until isLiquidatableAt, do not print 1.5x."
         ),
     ),
     SequenceStrategy(

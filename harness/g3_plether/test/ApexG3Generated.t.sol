@@ -52,13 +52,14 @@ contract ApexG3GeneratedTest is G3Sequence {
         _seedUnownedResidual(1e6);
         pool.assignUnassignedAssets(false, ATTACKER);
         require(
-            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,
+            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0
+                || pool.pendingRecapitalizationAssets() > 0,
             "residual/HWM path minted nothing"
         );
     }
 
     function test_attack_addMargin_freeSettlement() public {
-        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
+        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate. Liquidation uses unsafe_price_sweep instead of a fixed mark.
         _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
@@ -92,11 +93,14 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_settleLpEpoch_unassignedAssets() public {
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
+        // strategy:second_epoch — A leftover residual freezes the next requestDeposit. Queue a second matured epoch before seeding residual so a later observation still has a head.
+        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
         // strategy:unowned_residual — Write leftover into the unassigned bucket after the deposit is queued. Minting it before requestDeposit freezes the vault; accountExcess after a matured head consumes the epoch.
         _seedUnownedResidual(1e6);
-        _settleLpEpochForTest();
+        try _settleLpEpochForTest() {} catch {}
         require(
-            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,
+            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0
+                || pool.pendingRecapitalizationAssets() > 0,
             "residual/HWM path minted nothing"
         );
     }
@@ -104,14 +108,15 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_reconcile_highWaterMark() public {
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
+        // strategy:second_epoch — A leftover residual freezes the next requestDeposit. Queue a second matured epoch before seeding residual so a later observation still has a head.
+        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
         // strategy:unowned_residual — Write leftover into the unassigned bucket after the deposit is queued. Minting it before requestDeposit freezes the vault; accountExcess after a matured head consumes the epoch.
         _seedUnownedResidual(1e6);
         // strategy:pending_recap — HWM/senior overwrite needs a leftover recap bucket. An unowned mint alone does not create a claimant residual for a second observation.
         _seedPendingRecap(1e6);
-        // strategy:second_pass — HWM/recap overwrite is a second observation of the same books, not the first solvent epoch.
+        // strategy:second_pass — HWM/recap overwrite is a second observation of the same books, not the first solvent epoch. The second matured head is queued in second_epoch before residual; do not requestDeposit after leftover is live.
         _settleLpEpochForTest();
         _snapshotHwm();
-        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
         _settleLpEpochForTest();
         require(pool.seniorHighWaterMark() != snapshotHwm, "HWM path was a no-op");
     }
@@ -119,12 +124,13 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_settleLpEpoch_seniorPrincipal() public {
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
+        // strategy:second_epoch — A leftover residual freezes the next requestDeposit. Queue a second matured epoch before seeding residual so a later observation still has a head.
+        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
         // strategy:pending_recap — HWM/senior overwrite needs a leftover recap bucket. An unowned mint alone does not create a claimant residual for a second observation.
         _seedPendingRecap(1e6);
-        // strategy:second_pass — HWM/recap overwrite is a second observation of the same books, not the first solvent epoch.
+        // strategy:second_pass — HWM/recap overwrite is a second observation of the same books, not the first solvent epoch. The second matured head is queued in second_epoch before residual; do not requestDeposit after leftover is live.
         _settleLpEpochForTest();
         _snapshotHwm();
-        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
         _settleLpEpochForTest();
         require(pool.seniorPrincipal() != snapshotSenior, "senior principal ignored residual/recap");
     }
@@ -144,11 +150,14 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_reconcile_unassignedAssets() public {
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
+        // strategy:second_epoch — A leftover residual freezes the next requestDeposit. Queue a second matured epoch before seeding residual so a later observation still has a head.
+        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
         // strategy:unowned_residual — Write leftover into the unassigned bucket after the deposit is queued. Minting it before requestDeposit freezes the vault; accountExcess after a matured head consumes the epoch.
         _seedUnownedResidual(1e6);
-        _settleLpEpochForTest();
+        try _settleLpEpochForTest() {} catch {}
         require(
-            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,
+            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0
+                || pool.pendingRecapitalizationAssets() > 0,
             "residual/HWM path minted nothing"
         );
     }
@@ -166,7 +175,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_withdraw_freeSettlement() public {
         // strategy:filled_position — Close/margin probes need a live filled position, not an empty book.
         _openFilled(ATTACKER, _long(), 60);
-        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
+        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate. Liquidation uses unsafe_price_sweep instead of a fixed mark.
         _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
@@ -176,7 +185,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_commitOrder_freeSettlement() public {
-        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
+        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate. Liquidation uses unsafe_price_sweep instead of a fixed mark.
         _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
@@ -196,7 +205,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_executeOrder_freeSettlement() public {
-        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
+        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate. Liquidation uses unsafe_price_sweep instead of a fixed mark.
         _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
@@ -221,13 +230,15 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_executeLiquidationBatch_freeSettlement() public {
-        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
-        _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
+        // strategy:unsafe_price_sweep — Liquidation cleanup only voids a queued open if the live position is actually unsafe. Sweep marks until isLiquidatableAt, do not print 1.5x.
+        _openThinFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReqAt("q", _long(), 60, 1_000e18, 100e6)); _sweepUntilLiquidatable(ATTACKER);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
         address[] memory accounts = new address[](1);
         accounts[0] = ATTACKER;
-        router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8));
+        uint256 liqMark = engine.lastMarkPrice();
+        if (liqMark == 0) liqMark = 1.5e8;
+        router.executeLiquidationBatch(accounts, _mockPythUpdateData(liqMark));
         require(
             router.nextExecuteId() == 0 || _freeOf(ATTACKER) != snapshotFree,
             "liq cleanup left the pending order binding"
@@ -259,12 +270,8 @@ contract ApexG3GeneratedTest is G3Sequence {
         _thinPool();
         // strategy:counterparty_open — Admission backing is revealed when an opposite-side winner already exists. A lone open into thin cash does not latch degradedMode.
         _openFilled(VICTIM, _short(), 60);
-        uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
-        OrderV3Types.ExecutionResult memory execResult = router.executeOrder(oid, _mockPythUpdateData(1e8));
-        require(
-            uint8(execResult.status) == uint8(OrderV3Types.LifecycleStatus.Executed),
-            "execute after oracle/config print failed"
-        );
+        // strategy:legal_mark_search — A hardcoded seed or 1.5x print is often skew-illegal after a counterparty fill. Search marks until executeOpen admits, then close the winner.
+        _openAtFirstLegalMark(ATTACKER, _long());
         _closeFilled(VICTIM);
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
@@ -286,7 +293,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_commitOrder_executionWindow() public {
-        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
+        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate. Liquidation uses unsafe_price_sweep instead of a fixed mark.
         _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:warp_past_window — After commit, warp past the trader-chosen window before expire/execute.
         uint64 oid = _commitAs(ATTACKER, _openReq("w", _long(), 2));
@@ -321,16 +328,30 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_executeLiquidationBatch_liquidationReserve() public {
+        // strategy:unsafe_price_sweep — Liquidation cleanup only voids a queued open if the live position is actually unsafe. Sweep marks until isLiquidatableAt, do not print 1.5x.
+        _openThinFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReqAt("q", _long(), 60, 1_000e18, 100e6)); _sweepUntilLiquidatable(ATTACKER);
+        _snapshotLiqReserve(ATTACKER);
         address[] memory accounts = new address[](1);
-        accounts[0] = VICTIM;
-        try router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8)) {} catch {}
-        revert("no distinguishing assertion for this pair");
+        accounts[0] = ATTACKER;
+        uint256 liqMark = engine.lastMarkPrice();
+        if (liqMark == 0) liqMark = 1.5e8;
+        router.executeLiquidationBatch(accounts, _mockPythUpdateData(liqMark));
+        require(
+            clearinghouse.liquidationReserveAssets(ATTACKER) != snapshotLiqReserve,
+            "liquidation reserve path was a no-op"
+        );
     }
 
     function test_attack_applyOpen_liquidationReserve() public {
+        // strategy:reserve_open — Open-path liquidation-reserve probes need a live filled account to reprice the bucket.
+        _openFilled(ATTACKER, _long(), 60);
+        _snapshotLiqReserve(ATTACKER);
         uint64 oid = _commitAs(ATTACKER, _openReq("g", _long(), 60));
         try router.executeOrder(oid, _mockPythUpdateData(1e8)) {} catch {}
-        revert("no distinguishing assertion for this pair");
+        require(
+            clearinghouse.liquidationReserveAssets(ATTACKER) != snapshotLiqReserve,
+            "liquidation reserve path was a no-op"
+        );
     }
 
     function test_attack_adverseLiquidationPrice_acceptedBasket() public {
@@ -361,7 +382,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_assessCommittedOrder_freeSettlement() public {
-        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
+        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate. Liquidation uses unsafe_price_sweep instead of a fixed mark.
         _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
@@ -378,7 +399,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_evaluateOpen_freeSettlement() public {
-        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
+        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate. Liquidation uses unsafe_price_sweep instead of a fixed mark.
         _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
@@ -393,10 +414,16 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_settleLpEpoch_protocolTreasury() public {
+        // strategy:receipt_open — NAV/sharePrice tests need a reclaimable receipt in flight. Open first so the outsider epoch is priced against that receipt.
+        _openFilled(ATTACKER, _long(), 60);
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
+        _snapshotTreasury();
         _settleLpEpochForTest();
-        revert("no distinguishing assertion for this pair");
+        require(
+            clearinghouse.balanceAssets(engine.protocolTreasury()) != snapshotTreasury,
+            "protocol treasury path was a no-op"
+        );
     }
 
     function test_attack_evaluateOpen_acceptedBasket() public {

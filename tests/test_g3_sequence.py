@@ -25,10 +25,13 @@ class SequenceSelectionTests(unittest.TestCase):
     def test_settle_unassigned_seeds_unowned_residual(self):
         chosen = select_strategies("settleLpEpoch", "unassignedAssets", "hwm-recap-accounting")
         self.assertIn("unowned_residual", chosen)
+        self.assertIn("second_epoch", chosen)
         src = setup_block("settleLpEpoch", "unassignedAssets", "hwm-recap-accounting")
         self.assertIn("_seedUnownedResidual", src)
         self.assertIn("_warpToDepositEpoch", src)
+        self.assertGreaterEqual(src.count("_warpToDepositEpoch"), 2)
         self.assertLess(src.index("_warpToDepositEpoch"), src.index("_seedUnownedResidual"))
+        self.assertLess(src.rindex("_warpToDepositEpoch"), src.index("_seedUnownedResidual"))
 
     def test_assign_unassigned_needs_unowned_residual_not_account_excess(self):
         # Root cause: mint-to-pool + accountExcess left unassigned=0.
@@ -116,13 +119,17 @@ class SequenceSelectionTests(unittest.TestCase):
         chosen = select_strategies("reconcile", "highWaterMark", "hwm-recap-accounting")
         self.assertIn("pending_recap", chosen)
         self.assertIn("second_pass", chosen)
+        self.assertIn("second_epoch", chosen)
         src = setup_block("reconcile", "highWaterMark", "hwm-recap-accounting")
         self.assertIn("_seedPendingRecap", src)
+        self.assertGreaterEqual(src.count("_warpToDepositEpoch"), 2)
+        self.assertLess(src.rindex("_warpToDepositEpoch"), src.index("_seedPendingRecap"))
 
     def test_execute_open_degraded_opens_into_thin_cash_not_a_second_long(self):
         chosen = select_strategies("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("thin_pool", chosen)
         self.assertIn("counterparty_open", chosen)
+        self.assertIn("legal_mark_search", chosen)
         self.assertNotIn("drain_cash", chosen)
         self.assertNotIn("multi_actor_hedge", chosen)
         src = setup_block("executeOpen", "degradedMode", "false-emergency-mode")
@@ -130,6 +137,19 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("_openFilled(VICTIM, _short()", src)
         self.assertNotIn("_publish(1.5e8)", src)
         self.assertNotIn("_thinPoolTo(10_000e6)", src)
+
+    def test_liquidation_freesettlement_sweeps_until_unsafe(self):
+        chosen = select_strategies(
+            "executeLiquidationBatch", "freeSettlement", "delayed-order-optionality"
+        )
+        self.assertIn("unsafe_price_sweep", chosen)
+        self.assertNotIn("price_print_then_mutate", chosen)
+        src = setup_block(
+            "executeLiquidationBatch", "freeSettlement", "delayed-order-optionality"
+        )
+        self.assertIn("_openThinFilled", src)
+        self.assertIn("_sweepUntilLiquidatable", src)
+        self.assertNotIn("_publish(1.5e8)", src)
 
     def test_random_deposit_total_supply_is_not_a_hedge_sequence(self):
         chosen = select_strategies("deposit", "totalSupply", "")
@@ -143,6 +163,16 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("_seedPendingRecap", src)
         self.assertIn("pendingRecapitalizationAssets", src)
         self.assertIn("_snapshotHwm", src)
+        self.assertNotIn("97591", src)
+
+    def test_sequence_helpers_search_marks_and_sweep_liquidation(self):
+        src = (ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol").read_text(encoding="utf-8")
+        self.assertIn("_openThinFilled", src)
+        self.assertIn("_sweepUntilLiquidatable", src)
+        self.assertIn("isLiquidatableAt", src)
+        self.assertIn("_openAtFirstLegalMark", src)
+        self.assertIn("_snapshotLiqReserve", src)
+        self.assertIn("_snapshotTreasury", src)
         self.assertNotIn("97591", src)
 
     def test_unowned_residual_helper_does_not_call_account_excess(self):

@@ -34,6 +34,8 @@ def overlay_id(function: str, var: str, family: str = "") -> str:
         "evaluateopen",
     }:
         return "pending_order"
+    if "liquidationreserve" in var_l:
+        return "pending_order"
     if "unassigned" in var_l or "highwater" in var_l or var_l == "seniorprincipal":
         return "assign_outstanding"
     if family == "false-emergency-mode" or var_l == "degradedmode":
@@ -188,7 +190,25 @@ def _patches() -> dict[str, list[tuple[str, str, str]]]:
                 "        uint256 shares = ITrancheVaultBootstrap(targetVault).quoteBootstrapDeposit(amount);\n"
                 "        if (shares == 0) {\n            revert HousePool__BootstrapSharesZero();\n        }\n"
                 "        if (!toSenior && juniorPrincipal > 0) {\n            revert HousePool__NoUnassignedAssets();\n        }\n\n        if (toSenior) {",
-            )
+            ),
+            (
+                "HousePool.sol",
+                "        _reconcile(accountingSnapshot, statusSnapshot);\n"
+                "        _checkpointEngineCarryIndexes();",
+                "        unassignedAssets = 0;\n"
+                "        pendingRecapitalizationAssets = 0;\n"
+                "        _reconcile(accountingSnapshot, statusSnapshot);\n"
+                "        _checkpointEngineCarryIndexes();",
+            ),
+            (
+                "HousePool.sol",
+                "        if (result.seniorProcessedEpochs == 0 && result.juniorProcessedEpochs == 0 && depositProcessedEpochs == 0) {\n"
+                "            revert HousePool__NoLpEpochProgress();\n"
+                "        }",
+                "        if (false && result.seniorProcessedEpochs == 0 && result.juniorProcessedEpochs == 0 && depositProcessedEpochs == 0) {\n"
+                "            revert HousePool__NoLpEpochProgress();\n"
+                "        }",
+            ),
         ],
         "margin_backing": [
             (

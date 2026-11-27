@@ -57,7 +57,7 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertNotIn('_openReq("x"', src)
 
     def test_execute_liquidation_without_pending_print_uses_valid_try_catch(self):
-        src = render_test("executeLiquidationBatch", "liquidationReserve", "delayed-order-optionality")
+        src = render_test("adverseLiquidationPrice", "acceptedBasket", "oracle-staleness-calendar-watermark")
         self.assertIn("try router.executeLiquidationBatch", src)
         self.assertNotIn("1.5e8)); {}", src)
         self.assertIn("try router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8)) {} catch {}", src)
@@ -67,7 +67,19 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("accounts[0] = ATTACKER", src)
         self.assertNotIn("accounts[0] = VICTIM", src)
         self.assertNotIn("try router.executeLiquidationBatch", src)
+        self.assertIn("_sweepUntilLiquidatable", src)
+        self.assertIn("_openThinFilled", src)
         self.assertIn("nextExecuteId", src)
+        self.assertIn("liqMark", src)
+
+    def test_execute_liquidation_reserve_asserts_bucket_move(self):
+        src = render_test(
+            "executeLiquidationBatch", "liquidationReserve", "delayed-order-optionality"
+        )
+        self.assertIn("_snapshotLiqReserve", src)
+        self.assertIn("liquidation reserve path was a no-op", src)
+        self.assertIn("_sweepUntilLiquidatable", src)
+        self.assertNotIn('revert("no distinguishing assertion for this pair")', src)
 
     def test_settle_trader_claim_emits_claim_seed_and_pending_print(self):
         src = render_test("settleTraderClaim", "freeSettlement", "delayed-order-optionality")
@@ -83,12 +95,23 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_snapshotHwm", src)
         self.assertIn("seniorHighWaterMark() != snapshotHwm", src)
         self.assertGreaterEqual(src.count("_settleLpEpochForTest()"), 2)
+        self.assertGreaterEqual(src.count("_warpToDepositEpoch"), 2)
+        snap = src.index("_snapshotHwm")
+        self.assertNotIn("_queueDeposit", src[snap:])
 
     def test_execute_open_degraded_closes_the_counterparty(self):
         src = render_test("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("_openFilled(VICTIM, _short()", src)
         self.assertIn("_closeFilled(VICTIM)", src)
         self.assertIn("_thinPool()", src)
+        self.assertIn("_openAtFirstLegalMark", src)
+
+    def test_settle_unassigned_does_not_queue_after_residual(self):
+        src = render_test("settleLpEpoch", "unassignedAssets", "hwm-recap-accounting")
+        self.assertGreaterEqual(src.count("_warpToDepositEpoch"), 2)
+        residual = src.index("_seedUnownedResidual")
+        self.assertNotIn("_queueDeposit", src[residual:])
+        self.assertIn("try _settleLpEpochForTest()", src)
 
     def test_addmargin_emits_free_snapshot_and_price_print(self):
         src = render_test("addMargin", "freeSettlement", "delayed-order-optionality")
