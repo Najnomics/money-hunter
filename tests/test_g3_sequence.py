@@ -28,7 +28,7 @@ class SequenceSelectionTests(unittest.TestCase):
         src = setup_block("settleLpEpoch", "unassignedAssets", "hwm-recap-accounting")
         self.assertIn("_seedUnownedResidual", src)
         self.assertIn("_warpToDepositEpoch", src)
-        self.assertLess(src.index("_seedUnownedResidual"), src.index("_warpToDepositEpoch"))
+        self.assertLess(src.index("_warpToDepositEpoch"), src.index("_seedUnownedResidual"))
 
     def test_assign_unassigned_needs_unowned_residual_not_account_excess(self):
         # Root cause: mint-to-pool + accountExcess left unassigned=0.

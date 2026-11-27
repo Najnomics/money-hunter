@@ -40,19 +40,6 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
-        id="unowned_residual",
-        when_fn=_re(r"assign|reconcile|accountExcess|settle"),
-        when_var=_re(r"unassigned|residual|unowned|highWater"),
-        when_family=frozenset(),
-        setup="_seedUnownedResidual(1e6);",
-        why=(
-            "mint-to-pool + accountExcess books into accountedAssets / junior, "
-            "so unassigned stays 0. Account the cash then reserve that slice in "
-            "the unassigned bucket so reconcile cannot treat it as junior revenue. "
-            "Seed before epoch warp; accountExcess after a matured head consumes it."
-        ),
-    ),
-    SequenceStrategy(
         id="epoch_advance",
         when_fn=_re(r"settle|epoch|reconcile|requestDeposit|requestRedeem"),
         when_var=_re(r"."),
@@ -61,6 +48,18 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         why=(
             "settle/epoch reverts with no matured head (NoLpEpochProgress). "
             "Queue a pending deposit and warp to its epoch before the mutator."
+        ),
+    ),
+    SequenceStrategy(
+        id="unowned_residual",
+        when_fn=_re(r"assign|reconcile|accountExcess|settle"),
+        when_var=_re(r"unassigned|residual|unowned|highWater"),
+        when_family=frozenset(),
+        setup="_seedUnownedResidual(1e6);",
+        why=(
+            "Write leftover into the unassigned bucket after the deposit is queued. "
+            "Minting it before requestDeposit freezes the vault; accountExcess "
+            "after a matured head consumes the epoch."
         ),
     ),
     SequenceStrategy(
