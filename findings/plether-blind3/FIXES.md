@@ -52,6 +52,7 @@ Selected from `(function, var, family)` tokens only. No finding ids in the gener
 | 36 | `G3Sequence._openThinFilled` + `_sweepUntilLiquidatable` + `unsafe_price_sweep` | `test_liquidation_freesettlement_sweeps_until_unsafe`, `test_sequence_helpers_search_marks_and_sweep_liquidation` | Liquidation cleanup that only fires when a live position is actually unsafe, not at a fixed 1.5x mark |
 | 37 | `G3Sequence._openAtFirstLegalMark` + `legal_mark_search` | `test_execute_open_degraded_closes_the_counterparty`, `test_sequence_helpers_search_marks_and_sweep_liquidation` | Admission / false-emergency probes that are skew-illegal at the seed mark or a hardcoded shock |
 | 38 | `g3_poc_generator._assert` — `liquidationReserve` / `protocolTreasury` snapshots | `test_execute_liquidation_reserve_asserts_bucket_move` | Pair-only reserve/treasury sinks that previously had no distinguishing assertion |
+| 39 | `g3_sequence.epoch_advance` — HWM/senior observe leftover recap without a deposit head | `test_hwm_reconcile_seeds_recap_and_takes_a_second_pass` | Recap residual that is masked when a matured deposit moves HWM on both pin and overlay |
 
 Tests: `tests/test_g3_sequence.py`, `tests/test_g3_poc_generator.py`, `tests/test_g3_overlay.py`, plus `tests/test_plether_recall.py` and `tests/test_recall_gates.py`.
 
