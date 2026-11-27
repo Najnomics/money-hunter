@@ -37,6 +37,8 @@ class G3PocGeneratorTests(unittest.TestCase):
         src_w = render_test("withdraw", "vpiRebateReserve", "refundable-receipt-in-nav")
         self.assertIn("_openFilled(ATTACKER, _short()", src_w)
         self.assertIn("_snapshotRebate(ATTACKER)", src_w)
+        self.assertIn("_snapshotNav()", src_w)
+        self.assertIn("snapshotVictim", src_w)
         src_o = render_test("executeOpen", "vpiRebateReserve", "refundable-receipt-in-nav")
         self.assertIn("_openFilled(VICTIM, _long()", src_o)
         self.assertIn("_short()", src_o)

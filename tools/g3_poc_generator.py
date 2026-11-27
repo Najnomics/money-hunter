@@ -122,6 +122,14 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
             "        } catch {}"
         )
     if var == "vpiRebateReserve":
+        if function == "withdraw":
+            return (
+                "        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));\n"
+                "        require(\n"
+                "            _rebateOf(ATTACKER) != snapshotRebate || victimAfter != snapshotVictim,\n"
+                '            "withdraw left rebate backing and incumbent NAV unchanged"\n'
+                "        );"
+            )
         return (
             '        require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");'
         )
@@ -183,6 +191,8 @@ def render_test(function: str, var: str, family: str = "") -> str:
     snap = ""
     if var == "vpiRebateReserve":
         snap = "        _snapshotRebate(ATTACKER);"
+        if function == "withdraw":
+            snap += "\n        _snapshotNav();"
     if var in {"sharePrice", "nav", "totalAssets", "pnlPledgeAssets", "seniorPrincipal"}:
         snap = "        _snapshotNav();"
     if var in {"traderClaimBalance", "freeSettlement", "freeBalance"} and "locked_vs_free" not in strategies:

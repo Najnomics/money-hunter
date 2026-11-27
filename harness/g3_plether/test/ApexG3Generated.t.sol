@@ -135,9 +135,14 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:pending_close — A live rebate reserve is still locked while the position is open. Commit a close first so withdraw can waive or release that backing.
         _commitClose(ATTACKER);
         _snapshotRebate(ATTACKER);
+        _snapshotNav();
         uint256 free = _freeOf(ATTACKER);
         if (free > 0) { vm.prank(ATTACKER); clearinghouse.withdraw(ATTACKER, free); }
-        require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");
+        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
+        require(
+            _rebateOf(ATTACKER) != snapshotRebate || victimAfter != snapshotVictim,
+            "withdraw left rebate backing and incumbent NAV unchanged"
+        );
     }
 
     function test_attack_applyRouterConfigAfterOracle_acceptedBasket() public {
