@@ -58,3 +58,19 @@ findings/lido-lend/hunters/pass3.json
 ```
 
 Branch: `cursor/lido-lend-audit`. No Immunefi submission.
+
+## Addendum — pass 7 (harness blind-prediction pass, 2026-11-27)
+
+| Pass | Artifact | Keep | Kill | Verified |
+|---|---|---:|---:|---:|
+| 7 (phases 0-6 pipeline) | [PASS-7.md](PASS-7.md), [corpus-update.md](corpus-update.md) | 0 | 8 (incl. re-checks of L-P1-001/002) | 0 |
+
+Method: 11 blind predictions written from specs before reading any
+implementation body; 8 prediction diffs (all match docs); 14-row assumption
+inventory (all dispositioned); 4 executed read-only probes on the pinned
+deployed bytecode (`.apex/experiments/E1-4-onchain-probes.log`); 4/4 lens
+hypotheses disproved with cited evidence; citations 152/152; coverage 13/13
+critical flows. Verified count unchanged: **0**. No FINDING files (verified-only rule).
+
+Additional paths: `findings/lido-lend/PASS-7.md`, `findings/lido-lend/corpus-update.md`,
+`findings/lido-lend/DOCS.md`, `findings/lido-lend/AUDITS.md`, `findings/lido-lend/LOG.md`.

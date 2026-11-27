@@ -34,3 +34,10 @@ Branch: `cursor/lido-lend-audit`. Harness: Money Hunter pipeline, policy `standa
 - Blind predictions recorded for all 11 CRITICAL flows (.apex/predictions/F01..F11-prediction.md), each with PROVENANCE (specs/API only, no .sol bodies read), >=2 surprises, boundary semantics. Skeletons: signature-only extraction.
 - ISS rows (matcher zero-hit, predictions cited API-level docs instead): F03, F04, F05, F06, F11 — flow-name keyword did not match; surfaces exist (vault settleTargets, deposit/redeem, borrow, withdrawCollateral, borrowRate); matcher limitation noted, not bypassed: no unrelated files substituted.
 - Strict-mode extras (vocab/sinks tables) not required under standard policy.
+
+## 2026-11-27 — Pass 7 (harness pipeline) complete
+
+- Phases 0-6 green: 13 flows (11 critical), 11 blind predictions (specs-only provenance), 8 prediction diffs (all design-choice/match), 14 assumptions (all dispositioned), 413 hypotheses seeded, 4 executed onchain probes (E1-E4), 4/4 lens hypotheses disproved, citations 152/152, coverage 13/13 flows (fail-closed lifted), report regenerated (0 verified).
+- Body-level re-checks of pass-1 keeps L-P1-001/L-P1-002: both kills confirmed with wei-level sizing.
+- ARTIFACT CORRECTION: stale line refs LidoLendVaultAdapter.sol:87-88 corrected to :63 in .apex state (factual typo fix; real floor-sum line is 63).
+- findings/lido-lend/PASS-7.md + corpus-update.md recorded. Verified count remains 0.
