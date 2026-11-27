@@ -86,11 +86,13 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertEqual(src.count("function test_attack_settleLpEpoch_sharePrice"), 1)
 
     def test_blind_catalog_is_named_open_plus_pair_only(self):
-        from tools.g3_harness import VERIFIED_IDS
+        from tools.g3_harness import NAMED_OPEN_IDS, VERIFIED_IDS
         from tools.g3_poc_generator import blind_items
 
         named, pair_only = blind_items()
-        self.assertEqual(len(named), 16)
+        remaining_named = [i for i in NAMED_OPEN_IDS if i not in VERIFIED_IDS]
+        self.assertEqual(len(named), len(NAMED_OPEN_IDS))
+        self.assertEqual(len(remaining_named), 16)
         self.assertEqual(len(pair_only), 25)
         self.assertEqual(len(VERIFIED_IDS), 27)
         src = GEN.read_text(encoding="utf-8")

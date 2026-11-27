@@ -243,7 +243,10 @@ def write_generated(pairs: list[tuple[str, str, str]], dest: Path | None = None)
 
 
 def blind_items() -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]]]:
-    """33 remaining NAMED_OPEN + 25 pair-only from the miss catalog, not the answer key."""
+    """NAMED_OPEN (including verified, so exact tests stay on disk) + pair-only.
+
+    Remaining-open count is NAMED_OPEN_IDS minus VERIFIED_IDS. Never submit.
+    """
     from tests.plether_misses import MISSES
 
     named_open = set(NAMED_OPEN_IDS)
@@ -251,7 +254,7 @@ def blind_items() -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]
     pair_only: list[tuple[str, str, str]] = []
     for miss in MISSES:
         item = (miss.function, miss.var, miss.family)
-        if miss.id in named_open and miss.id not in VERIFIED_IDS:
+        if miss.id in named_open:
             named.append(item)
         elif miss.bucket == "PAIR-ONLY" and miss.id not in named_open:
             pair_only.append(item)
