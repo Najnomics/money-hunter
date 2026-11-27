@@ -22,8 +22,8 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:oracle_first_tick — Fill with the first post-commit tick (commitTime+1), not a later keeper delay.
         uint64 oid = _commitAs(ATTACKER, _openReq("t", _long(), 60));
         router.executeOrder(oid, _mockPythUpdateData(1e8));
-        uint64 oid = _commitAs(ATTACKER, _openReq("tick", _long(), 60));
-        OrderV3Types.ExecutionResult memory result = router.executeOrder(oid, _mockPythUpdateData(1e8));
+        uint64 tickOid = _commitAs(ATTACKER, _openReq("tick", _long(), 60));
+        OrderV3Types.ExecutionResult memory result = router.executeOrder(tickOid, _mockPythUpdateData(1e8));
         require(uint8(result.status) == uint8(OrderV3Types.LifecycleStatus.Executed), "first tick failed");
     }
 
@@ -280,8 +280,8 @@ contract ApexG3GeneratedTest is G3Sequence {
         uint64 oid = _commitAs(ATTACKER, _openReq("w", _long(), 2));
         vm.warp(uint256(book.orderTiming(oid).executionDeadline) + 1);
         router.expireOrder(oid);
-        uint64 oid = _commitAs(ATTACKER, _openReq("w2", _long(), 2));
-        require(book.orderTiming(oid).executionWindowSeconds == 2, "2s window rejected");
+        uint64 windowOid = _commitAs(ATTACKER, _openReq("w2", _long(), 2));
+        require(book.orderTiming(windowOid).executionWindowSeconds == 2, "2s window rejected");
     }
 
     function test_attack_applyRouterConfigAfterOracle_acceptedBasket() public {

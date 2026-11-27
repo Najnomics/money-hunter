@@ -182,14 +182,14 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
         return '        require(engine.degradedMode(), "split close did not latch degradedMode");'
     if var in {"executionWindow", "executionWindowSeconds"}:
         return (
-            '        uint64 oid = _commitAs(ATTACKER, _openReq("w2", _long(), 2));\n'
-            '        require(book.orderTiming(oid).executionWindowSeconds == 2, "2s window rejected");'
+            '        uint64 windowOid = _commitAs(ATTACKER, _openReq("w2", _long(), 2));\n'
+            '        require(book.orderTiming(windowOid).executionWindowSeconds == 2, "2s window rejected");'
         )
     if var == "minPublishTime":
         return (
-            '        uint64 oid = _commitAs(ATTACKER, _openReq("tick", _long(), 60));\n'
+            '        uint64 tickOid = _commitAs(ATTACKER, _openReq("tick", _long(), 60));\n'
             "        OrderV3Types.ExecutionResult memory result = "
-            "router.executeOrder(oid, _mockPythUpdateData(1e8));\n"
+            "router.executeOrder(tickOid, _mockPythUpdateData(1e8));\n"
             '        require(uint8(result.status) == uint8(OrderV3Types.LifecycleStatus.Executed), "first tick failed");'
         )
     return (
