@@ -200,6 +200,113 @@ def lead_001():
     print("DONE L-P1-001")
 
 
+ADMIN_SLOT = "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103"
+IMPL_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
+CONTROLLER = "0xCF1B266d320CA9c0d4e13eF2C46465962F040e88"
+GUARDIAN = "0xc8a8CBBF4c55980F85332fD8470DF0fC52d690aC"
+IRM = "0x81B7cC9523B30429110282d90db2fa90ff443d91"
+OWNER_FACADE = "0x85378a1073E8f338e11A97E090E47e2F0FdD3D5a"
+BREAKER = "0xd0A81A130a303237d338A0b5835edcB011Ab3afd"
+FACTORY = "0xBe1C1eaBda3eD8a93D3CE3246cf4EeF8111c76C7"
+PRESEEDER = "0x3F107d1fbCA49F425321Cb27f6Ef5CbB94a72c41"
+ACTIVATE = "0x17bb2A2B5983D29392A5d31D627D4C8B13383fe6"
+CORE_IMPL = "0xa40Bd2281F54A2D3845F9535b74D2abD946E1911"
+IRM_IMPL = "0x683eA34c29658fb6cDeCc92Eb4B4e7f766979868"
+
+
+def storage(addr: str, slot: str) -> str:
+    return rpc("eth_getStorageAt", [addr, slot, BLOCK])
+
+
+def word_addr(word: str) -> str:
+    w = word.lower().replace("0x", "").zfill(64)
+    return "0x" + w[24:]
+
+
+def lead_003():
+    print("=== PASS-3 fork reads @ block", BLOCK, "===")
+    for name, addr in (
+        ("LidoLend proxy", CORE),
+        ("IrmRouter proxy", IRM),
+        ("controller proxy", CONTROLLER),
+        ("vault proxy", VAULT),
+        ("guardian proxy", GUARDIAN),
+        ("oracle proxy", ORACLE),
+    ):
+        try:
+            admin = word_addr(storage(addr, ADMIN_SLOT))
+            impl = word_addr(storage(addr, IMPL_SLOT))
+            print(f"{name} admin={admin} impl={impl}")
+        except Exception as e:
+            print(f"{name} storage err {e}")
+
+    raw, err = call(CORE, "0x" + sel("owner()"))
+    print("core.owner:", word_addr(raw) if raw else err)
+    raw, err = call(CORE, "0x" + sel("isInitialized()"))
+    print("core.isInitialized:", None if err else bool(int(raw, 16)), "err", err)
+
+    raw, err = call(IRM, "0x" + sel("isInitialized()"))
+    print("irmRouter.isInitialized:", None if err else bool(int(raw, 16)), "err", err)
+    raw, err = call(IRM, "0x" + sel("owner()"))
+    print("irmRouter.owner:", word_addr(raw) if raw else err)
+
+    raw, err = call(CONTROLLER, "0x" + sel("marketId()"))
+    print("controller.marketId:", raw if raw else err)
+    raw, err = call(CONTROLLER, "0x" + sel("isFrozen()"))
+    print("controller.isFrozen:", None if err else bool(int(raw, 16)), "err", err)
+    raw, err = call(CONTROLLER, "0x" + sel("guardianSignals()"))
+    print("controller.guardianSignals:", word_addr(raw) if raw else err)
+    raw, err = call(CONTROLLER, "0x" + sel("paused()"))
+    print("controller.paused:", raw if raw else err)
+
+    raw, err = call(VAULT, "0x" + sel("asset()"))
+    print("vault.asset:", word_addr(raw) if raw else err)
+    raw, err = call(VAULT, "0x" + sel("marketId()"))
+    print("vault.marketId:", raw if raw else err)
+    raw, err = call(VAULT, "0x" + sel("controller()"))
+    print("vault.controller:", word_addr(raw) if raw else err)
+
+    # unprivileged initialize on live proxies
+    init_core = "0x" + sel("initialize(address)") + addr_word(EOA)
+    raw, err = call(CORE, init_core, frm=EOA)
+    print("core.initialize(eoa):", "ok" if raw else decode_revert(err or ""))
+    raw, err = call(CORE_IMPL, init_core, frm=EOA)
+    print("coreImpl.initialize(eoa):", "ok" if raw else decode_revert(err or ""))
+
+    init_irm = "0x" + sel("initialize(address,address)") + addr_word(EOA) + addr_word(EOA)
+    raw, err = call(IRM, init_irm, frm=EOA)
+    print("irmRouter.initialize(eoa,eoa):", "ok" if raw else decode_revert(err or ""))
+
+    # unprivileged createMarket
+    # skip full MarketParams encode; owner-only should fail even with zeros
+    raw, err = call(CORE, "0x" + sel("createMarket((address,address,address,address,uint256))") + "00" * 160, frm=EOA)
+    print("core.createMarket zeros as EOA:", "ok" if raw else decode_revert(err or ""))
+
+    raw, err = call(OWNER_FACADE, "0x" + sel("owner()"))
+    print("LidoLendOwner.owner:", word_addr(raw) if raw else err)
+
+    for sig in (
+        "owner()",
+        "pauseDuration()",
+        "heartbeatInterval()",
+        "DEFAULT_ADMIN_ROLE()",
+        "isPaused(address)",
+    ):
+        data = "0x" + sel(sig)
+        if "address" in sig:
+            data += addr_word(CONTROLLER)
+        raw, err = call(BREAKER, data)
+        print(f"breaker.{sig}:", (raw[:66] if raw else None), "err", err)
+
+    # factory is permissionless: just confirm code and ADMIN immutable if present
+    raw, err = call(FACTORY, "0x" + sel("ADMIN()"))
+    print("factory.ADMIN:", word_addr(raw) if raw else err)
+    raw, err = call(PRESEEDER, "0x" + sel("lidoLend()"))
+    print("preseeder.lidoLend:", word_addr(raw) if raw else err)
+
+    print("DONE PASS-3")
+
+
 def lead_002():
     print("=== L-P1-002 fork eth_call @ block", BLOCK, "===")
     for name, book in (("MorphoExitBook", MORPHO_BOOK), ("Erc4626ExitBook", ERC4626_BOOK)):
@@ -231,6 +338,8 @@ def main():
         lead_001()
     if lead in ("002", "all"):
         lead_002()
+    if lead in ("003", "pass3", "all"):
+        lead_003()
 
 
 if __name__ == "__main__":
