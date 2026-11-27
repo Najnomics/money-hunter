@@ -22,6 +22,14 @@ class OverlaySelectionTests(unittest.TestCase):
         self.assertEqual(overlay_id("addMargin", "freeSettlement", "delayed-order-optionality"), "pending_order")
         self.assertEqual(overlay_id("executeClose", "degradedMode", "false-emergency-mode"), "margin_backing")
 
+    def test_free_settlement_cousins_use_pending_order(self):
+        # Overlay must distinguish withdraw/commit/assess/evaluate, not only addMargin.
+        for fn in ("withdraw", "commitOrder", "assessCommittedOrder", "evaluateOpen"):
+            self.assertEqual(
+                overlay_id(fn, "freeSettlement", "delayed-order-optionality"),
+                "pending_order",
+            )
+
     def test_overflow_and_window_stay_on_score_b_overlays(self):
         self.assertEqual(overlay_id("convertToShares", "totalSupply", "share-supply-overflow"), "overflow_headroom")
         self.assertEqual(overlay_id("commitOrder", "executionWindow", "delayed-order-optionality"), "min_window")
@@ -34,6 +42,13 @@ class OverlaySelectionTests(unittest.TestCase):
         src = (ROOT / "tools" / "g3_overlay.py").read_text(encoding="utf-8")
         for finding in ("97591", "98209", "98854", "97590", "99136", "97906"):
             self.assertNotIn(finding, src)
+
+    def test_pending_order_also_guards_withdraw_and_stacked_commit(self):
+        src = (ROOT / "tools" / "g3_overlay.py").read_text(encoding="utf-8")
+        self.assertIn("MarginClearinghouse.sol", src)
+        self.assertIn("committedOrderMarginAssets[account] > 0", src)
+        self.assertIn("router/OrderLiquidationBatchLogic.sol", src)
+        self.assertIn("OrderRouter__SettlementFloorOrderPending(0)", src)
 
 
 if __name__ == "__main__":

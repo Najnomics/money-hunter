@@ -26,6 +26,14 @@ def overlay_id(function: str, var: str, family: str = "") -> str:
         return "first_tick"
     if fn_l == "addmargin" or (family == "delayed-order-optionality" and "free" in var_l):
         return "pending_order"
+    if "free" in var_l and fn_l in {
+        "withdraw",
+        "withdrawmargin",
+        "commitorder",
+        "assesscommittedorder",
+        "evaluateopen",
+    }:
+        return "pending_order"
     if "unassigned" in var_l or "highwater" in var_l:
         return "assign_outstanding"
     if family == "false-emergency-mode" or var_l == "degradedmode":
@@ -83,7 +91,37 @@ def _patches() -> dict[str, list[tuple[str, str, str]]]:
                 "CfdEngine.sol",
                 "        if (pos.lots == 0) {\n            revert CfdEngine__NoOpenPosition();\n        }\n\n        bytes32 expectedOldHash = _beginTerminalCurveMutation(account);",
                 "        if (pos.lots == 0) {\n            revert CfdEngine__NoOpenPosition();\n        }\n        if (clearinghouse.orderMarginAssets(account) > 0) {\n            revert CfdEngine__Unauthorized();\n        }\n\n        bytes32 expectedOldHash = _beginTerminalCurveMutation(account);",
-            )
+            ),
+            (
+                "MarginClearinghouse.sol",
+                "        if (settlementBalances[account] < amount) {\n"
+                "            revert MarginClearinghouse__InsufficientBalance();\n"
+                "        }\n\n"
+                "        _checkpointCarryBeforeMarginChange(account);",
+                "        if (settlementBalances[account] < amount) {\n"
+                "            revert MarginClearinghouse__InsufficientBalance();\n"
+                "        }\n"
+                "        if (committedOrderMarginAssets[account] > 0) {\n"
+                "            revert MarginClearinghouse__InsufficientFreeEquity();\n"
+                "        }\n\n"
+                "        _checkpointCarryBeforeMarginChange(account);",
+            ),
+            (
+                "router/OrderLiquidationBatchLogic.sol",
+                "            revert IOrderLifecycleBook.OrderLifecycleBook__ClientIdConflict(\n"
+                "                account, request.clientOrderId, existing.intentHash, suppliedIntentHash\n"
+                "            );\n"
+                "        }\n\n"
+                "        _validateFreshRequest(host, account, request, enforceProtectionLock);",
+                "            revert IOrderLifecycleBook.OrderLifecycleBook__ClientIdConflict(\n"
+                "                account, request.clientOrderId, existing.intentHash, suppliedIntentHash\n"
+                "            );\n"
+                "        }\n"
+                "        if (IMarginClearinghouse(host.engine().clearinghouse()).orderMarginAssets(account) > 0) {\n"
+                "            revert OrderRouter__SettlementFloorOrderPending(0);\n"
+                "        }\n\n"
+                "        _validateFreshRequest(host, account, request, enforceProtectionLock);",
+            ),
         ],
         "assign_outstanding": [
             (
