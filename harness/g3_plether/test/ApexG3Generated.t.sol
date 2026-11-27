@@ -115,9 +115,9 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:pending_recap — HWM/senior overwrite needs a leftover recap bucket. An unowned mint alone does not create a claimant residual for a second observation.
         _seedPendingRecap(1e6);
         // strategy:second_pass — HWM/recap overwrite is a second observation of the same books, not the first solvent epoch. The second matured head is queued in second_epoch before residual; do not requestDeposit after leftover is live.
-        _settleLpEpochForTest();
         _snapshotHwm();
-        _settleLpEpochForTest();
+        _trySettleLpEpoch();
+        _trySettleLpEpoch();
         require(pool.seniorHighWaterMark() != snapshotHwm, "HWM path was a no-op");
     }
 
@@ -129,9 +129,9 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:pending_recap — HWM/senior overwrite needs a leftover recap bucket. An unowned mint alone does not create a claimant residual for a second observation.
         _seedPendingRecap(1e6);
         // strategy:second_pass — HWM/recap overwrite is a second observation of the same books, not the first solvent epoch. The second matured head is queued in second_epoch before residual; do not requestDeposit after leftover is live.
-        _settleLpEpochForTest();
         _snapshotHwm();
-        _settleLpEpochForTest();
+        _trySettleLpEpoch();
+        _trySettleLpEpoch();
         require(pool.seniorPrincipal() != snapshotSenior, "senior principal ignored residual/recap");
     }
 
@@ -271,8 +271,8 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:counterparty_open — Admission backing is revealed when an opposite-side winner already exists. A lone open into thin cash does not latch degradedMode.
         _openFilled(VICTIM, _short(), 60);
         // strategy:legal_mark_search — A hardcoded seed or 1.5x print is often skew-illegal after a counterparty fill. Search marks until executeOpen admits, then close the winner.
-        _openAtFirstLegalMark(ATTACKER, _long());
         _closeFilled(VICTIM);
+        _openAtFirstLegalMark(ATTACKER, _long());
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 

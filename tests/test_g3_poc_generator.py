@@ -94,8 +94,9 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_seedPendingRecap", src)
         self.assertIn("_snapshotHwm", src)
         self.assertIn("seniorHighWaterMark() != snapshotHwm", src)
-        self.assertGreaterEqual(src.count("_settleLpEpochForTest()"), 2)
+        self.assertGreaterEqual(src.count("_trySettleLpEpoch()"), 2)
         self.assertGreaterEqual(src.count("_warpToDepositEpoch"), 2)
+        self.assertLess(src.index("_snapshotHwm"), src.index("_trySettleLpEpoch"))
         snap = src.index("_snapshotHwm")
         self.assertNotIn("_queueDeposit", src[snap:])
 
@@ -105,6 +106,7 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_closeFilled(VICTIM)", src)
         self.assertIn("_thinPool()", src)
         self.assertIn("_openAtFirstLegalMark", src)
+        self.assertLess(src.index("_closeFilled(VICTIM)"), src.index("_openAtFirstLegalMark"))
 
     def test_settle_unassigned_does_not_queue_after_residual(self):
         src = render_test("settleLpEpoch", "unassignedAssets", "hwm-recap-accounting")

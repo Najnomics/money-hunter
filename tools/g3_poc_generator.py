@@ -37,9 +37,9 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
     if fn in {"settleLpEpoch", "reconcile"}:
         if "second_pass" in strategies:
             return (
-                "        _settleLpEpochForTest();\n"
                 "        _snapshotHwm();\n"
-                "        _settleLpEpochForTest();"
+                "        _trySettleLpEpoch();\n"
+                "        _trySettleLpEpoch();"
             )
         if "unowned_residual" in strategies:
             return "        _trySettleLpEpoch();"
@@ -72,9 +72,10 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
                 "        );"
             )
         if "legal_mark_search" in strategies:
-            body = "        _openAtFirstLegalMark(ATTACKER, _long());"
+            body = ""
             if "counterparty_open" in strategies:
-                body += "\n        _closeFilled(VICTIM);"
+                body = "        _closeFilled(VICTIM);\n"
+            body += "        _openAtFirstLegalMark(ATTACKER, _long());"
             return body
         side = "_short()" if "skew_seed" in strategies else "_long()"
         body = (
