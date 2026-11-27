@@ -71,6 +71,8 @@ Selected from `(function, var, family)` tokens only. No finding ids in the gener
 
 Tests: `tests/test_g3_sequence.py`, `tests/test_g3_poc_generator.py`, `tests/test_g3_overlay.py`, plus `tests/test_plether_recall.py` and `tests/test_recall_gates.py`.
 
+SCORE-L stops at 62/63. **99663** (`executeClose × sharePrice`) stays open: pin and `zero_vpi` both move `convertToAssets(1e18)` by ~3-atom virtual-share dust.
+
 ## Per-finding map
 
 | ID | Sev | Bucket | Drop | Root cause | Fix | Test |
