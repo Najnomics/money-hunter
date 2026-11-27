@@ -149,7 +149,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         when_fn=_re(r"addMargin|withdraw|execute|commit|assess|evaluate"),
         when_var=_re(r"freeSettlement|freeBalance|executionWindow"),
         when_family=frozenset({"delayed-order-optionality"}),
-        setup='_openFilled(ATTACKER, _long(), 60); _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);',
+        setup='_openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);',
         why=(
             "Delayed-order optionality is after the fill price is public. "
             "Commit, publish, then snapshot free and mutate."

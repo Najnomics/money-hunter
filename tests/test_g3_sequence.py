@@ -72,6 +72,7 @@ class SequenceSelectionTests(unittest.TestCase):
         src = setup_block("addMargin", "freeSettlement", "delayed-order-optionality")
         self.assertIn("_snapshotFree", src)
         self.assertIn("_publish", src)
+        self.assertIn("lastCommitId = _commitAs", src)
         self.assertLess(src.index("_publish"), src.index("_snapshotFree"))
 
     def test_execute_close_degraded_needs_two_actors_and_price_move(self):

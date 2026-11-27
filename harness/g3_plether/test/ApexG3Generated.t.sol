@@ -61,17 +61,16 @@ contract ApexG3GeneratedTest is G3Sequence {
 
     function test_attack_executeOrder_freeSettlement() public {
         // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
-        _openFilled(ATTACKER, _long(), 60); _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
+        _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
-        uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
-        router.executeOrder(oid, _mockPythUpdateData(1e8));
+        router.executeOrder(lastCommitId, _mockPythUpdateData(1.5e8));
         require(_freeOf(ATTACKER) < snapshotFree, "free settlement did not drop");
     }
 
     function test_attack_executeLiquidationBatch_freeSettlement() public {
         // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
-        _openFilled(ATTACKER, _long(), 60); _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
+        _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
         address[] memory accounts = new address[](1);
@@ -137,7 +136,7 @@ contract ApexG3GeneratedTest is G3Sequence {
 
     function test_attack_commitOrder_freeSettlement() public {
         // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
-        _openFilled(ATTACKER, _long(), 60); _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
+        _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
         _commitAs(ATTACKER, _openReq("c", _long(), 60));
@@ -205,7 +204,7 @@ contract ApexG3GeneratedTest is G3Sequence {
 
     function test_attack_assessCommittedOrder_freeSettlement() public {
         // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
-        _openFilled(ATTACKER, _long(), 60); _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
+        _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
         _commitAs(ATTACKER, _openReq("a", _long(), 60));
@@ -222,7 +221,7 @@ contract ApexG3GeneratedTest is G3Sequence {
 
     function test_attack_evaluateOpen_freeSettlement() public {
         // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
-        _openFilled(ATTACKER, _long(), 60); _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
+        _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
         _commitAs(ATTACKER, _openReq("a", _long(), 60));

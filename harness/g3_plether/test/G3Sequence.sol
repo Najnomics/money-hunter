@@ -22,6 +22,7 @@ abstract contract G3Sequence is BasePerpTest {
     uint256 internal snapshotRebate;
     uint256 internal lastDepositRequest;
     uint256 internal openNonce;
+    uint64 internal lastCommitId;
 
     function _riskParams() internal pure override returns (CfdTypes.RiskParams memory) {
         return CfdTypes.RiskParams({
