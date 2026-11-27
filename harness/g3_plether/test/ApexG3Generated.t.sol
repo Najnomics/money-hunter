@@ -8,10 +8,10 @@ import {OrderV3Types} from "@plether/perps/OrderV3Types.sol";
 /// Auto-generated distinguishing G3 attacks. Never submit.
 contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_settleLpEpoch_unassignedAssets() public {
+        // strategy:unowned_residual — mint-to-pool + accountExcess books into accountedAssets / junior, so unassigned stays 0. Account the cash then reserve that slice in the unassigned bucket so reconcile cannot treat it as junior revenue. Seed before epoch warp; accountExcess after a matured head consumes it.
+        _seedUnownedResidual(1e6);
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        // strategy:unowned_residual — mint-to-pool + accountExcess books into accountedAssets / junior, so unassigned stays 0. Account the cash then reserve that slice in the unassigned bucket so reconcile cannot treat it as junior revenue.
-        _seedUnownedResidual(1e6);
         _settleLpEpochForTest();
         require(
             juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,
@@ -20,10 +20,10 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_reconcile_highWaterMark() public {
+        // strategy:unowned_residual — mint-to-pool + accountExcess books into accountedAssets / junior, so unassigned stays 0. Account the cash then reserve that slice in the unassigned bucket so reconcile cannot treat it as junior revenue. Seed before epoch warp; accountExcess after a matured head consumes it.
+        _seedUnownedResidual(1e6);
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        // strategy:unowned_residual — mint-to-pool + accountExcess books into accountedAssets / junior, so unassigned stays 0. Account the cash then reserve that slice in the unassigned bucket so reconcile cannot treat it as junior revenue.
-        _seedUnownedResidual(1e6);
         _settleLpEpochForTest();
         require(
             juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,
@@ -48,10 +48,10 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_reconcile_unassignedAssets() public {
+        // strategy:unowned_residual — mint-to-pool + accountExcess books into accountedAssets / junior, so unassigned stays 0. Account the cash then reserve that slice in the unassigned bucket so reconcile cannot treat it as junior revenue. Seed before epoch warp; accountExcess after a matured head consumes it.
+        _seedUnownedResidual(1e6);
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        // strategy:unowned_residual — mint-to-pool + accountExcess books into accountedAssets / junior, so unassigned stays 0. Account the cash then reserve that slice in the unassigned bucket so reconcile cannot treat it as junior revenue.
-        _seedUnownedResidual(1e6);
         _settleLpEpochForTest();
         require(
             juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,

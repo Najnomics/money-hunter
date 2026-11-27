@@ -40,6 +40,19 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
+        id="unowned_residual",
+        when_fn=_re(r"assign|reconcile|accountExcess|settle"),
+        when_var=_re(r"unassigned|residual|unowned|highWater"),
+        when_family=frozenset(),
+        setup="_seedUnownedResidual(1e6);",
+        why=(
+            "mint-to-pool + accountExcess books into accountedAssets / junior, "
+            "so unassigned stays 0. Account the cash then reserve that slice in "
+            "the unassigned bucket so reconcile cannot treat it as junior revenue. "
+            "Seed before epoch warp; accountExcess after a matured head consumes it."
+        ),
+    ),
+    SequenceStrategy(
         id="epoch_advance",
         when_fn=_re(r"settle|epoch|reconcile|requestDeposit|requestRedeem"),
         when_var=_re(r"."),
@@ -57,18 +70,6 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         when_family=frozenset(),
         setup="_openFilled(ATTACKER, _long(), 60);",
         why="Close/margin/claim probes need a live filled position, not an empty book.",
-    ),
-    SequenceStrategy(
-        id="unowned_residual",
-        when_fn=_re(r"assign|reconcile|accountExcess|settle"),
-        when_var=_re(r"unassigned|residual|unowned|highWater"),
-        when_family=frozenset(),
-        setup="_seedUnownedResidual(1e6);",
-        why=(
-            "mint-to-pool + accountExcess books into accountedAssets / junior, "
-            "so unassigned stays 0. Account the cash then reserve that slice in "
-            "the unassigned bucket so reconcile cannot treat it as junior revenue."
-        ),
     ),
     SequenceStrategy(
         id="skew_seed",
