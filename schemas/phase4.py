@@ -149,7 +149,7 @@ class NeverGeneratedInput(ApexModel):
         True,
         description="Auto-queue the top-N ranked public mutator × value-sink pairs as distinguishing G3 tests.",
     )
-    max_queue: int = Field(8, ge=1, le=50)
+    max_queue: int = Field(32, ge=1, le=50)
 
 
 class ChainNode(ApexModel):

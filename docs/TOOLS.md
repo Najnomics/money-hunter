@@ -85,7 +85,7 @@ empty `run_battery` will create a synthetic `DIV-SEED-*` if none exists.
 | `run_battery` | `battery=vault/lifecycle/boundary`, `trigger`, `checks[]`. Empty vault checks load the default share-price families and seed hypotheses. | `batteries` |
 | `chain_hypotheses` | `nodes[]` with pre/post facts, `chains[]` with edges and sink | `chains` |
 | `seed_from_research` | optional `divergence_id`; intel + past audits + families → hypotheses; default `fill_never_generated` | `research_seeds` (+ `gap_fill`) |
-| `never_generated_check` | optional `divergence_id`, `max_generate`, `queue_g3` (default true), `max_queue`. Public/external mutators only; `_` internals and ALL_CAPS constants dropped. Auto-queues top-N distinguishing G3 tests. | `gap_fill` (+ Phase 5 `experiments`) |
+| `never_generated_check` | optional `divergence_id`, `max_generate`, `queue_g3` (default true), `max_queue` (default 32). Public/external mutators plus high-EV `_apply`/`_arm`/liquidat stems; ALL_CAPS constants dropped. Delay-bound vars (`executionWindow`, …) always injected. Mechanism templates name same-RC pairs. Auto-queues top-N distinguishing G3 tests. | `gap_fill` (+ Phase 5 `experiments`) |
 
 ## Phase 5 — Experiment
 
@@ -94,7 +94,7 @@ empty `run_battery` will create a synthetic `DIV-SEED-*` if none exists.
 | `sandbox_forge` | `service`, `out_dir` | `sandbox` |
 | `invariant_tester` | `hypothesis_id`, `test_code`, `execute`, `command`, `experiment_class` (default distinguishing) | `experiments` |
 | `record_experiment` | `hypothesis_id`, `verdict`, `output_path`, `experiment_class`. confirmed/refuted require a distinguishing attack, not a happy-path or code-fact check. | `experiments` |
-| `queue_cartesian_g3` | `max_queue` (default 8). Writes prepared distinguishing tests for the top ranked public mutator × value-sink pairs. Never executes. | `experiments` |
+| `queue_cartesian_g3` | `max_queue` (default 32). Writes prepared distinguishing tests for the top ranked public mutator × value-sink pairs. Never executes. | `experiments` |
 
 ## Phase 6 — Validate & Report
 

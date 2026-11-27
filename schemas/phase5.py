@@ -73,7 +73,7 @@ class RecordExperimentInput(ApexModel):
 
 
 class CartesianQueueInput(ApexModel):
-    max_queue: int = Field(8, ge=1, le=50, description="How many top-ranked public pairs to materialize.")
+    max_queue: int = Field(32, ge=1, le=50, description="How many top-ranked public pairs to materialize.")
     execute: bool = Field(
         False,
         description="Queue never executes. Distinguishing attacks are recorded separately.",

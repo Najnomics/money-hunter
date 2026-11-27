@@ -590,7 +590,7 @@ def never_generated_check(ctx: ToolContext, inp: NeverGeneratedInput) -> Hypothe
     notes = [
         f"Enumerated {len(pairs)} public/external mutator × value-var pair(s); "
         f"{len(covered)} already touched; generated {len(generated)}; {len(leftover)} still uncovered. "
-        "Internal `_` functions and ALL_CAPS constants are dropped from the cartesian."
+        "ALL_CAPS constants are dropped; high-EV `_apply`/`_arm`/liquidat stems stay."
     ]
     if not pairs:
         notes.append(

@@ -2,7 +2,7 @@
 
 Blind campaign: **0 verified findings**. Official unique paid findings: **63** (18C / 10H / 11M / 24L). Operator “69” is not a published unique-finding total. See `findings/plether-key/CLASSIFICATION.md`.
 
-Root causes ranked by impact on that miss. Items 1–10 are on `cursor/recall-fixes-f6d2`. Items 11–15 (this branch, `cursor/recall-fixes-2-f6d2`) are the top five harness fixes from the blind2 score.
+Root causes ranked by impact on that miss. Items 1–10 are on `cursor/recall-fixes-f6d2`. Items 11–15 landed on `cursor/recall-fixes-2-f6d2`. Items 16–18 (this branch, `cursor/recall-fixes-3`) harden 11–15 against the **real Blind2 kill language** and close the remaining 42 pair-only + 1 never-generated misses. Mapping: `findings/plether-blind3/FIXES.md`.
 
 ## Honest caveat (read this before re-running Plether)
 
@@ -123,6 +123,8 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 - `tests/test_intel_pdf.py` — bundled intel, PDF ingest, family seeding, default vault battery (no protocol-specific names)
 - `tests/test_never_generated.py` — cartesian fill, getters skipped, already-covered pairs skipped, `_` internals and constants dropped
 - `tests/test_recall_gates.py` — freeze-is-impact G4, distinguishing vs happy-path/code-fact G3, per-variant family kills, public cartesian G3 queue, excerpt→in-scope mapping before wrong-protocol kill
+- `tests/test_plether_recall.py` — one regression per Blind2 miss (6 wrongly killed crits, highs 97628/97590, every other killed M/L, all 42 pair-only, never-generated 99136)
+- `tests/plether_misses.py` — catalog of the 63 drops (gate, locus, family, kill text)
 
 ## Top 15 (summary)
 
@@ -141,3 +143,24 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 13. Family G4 kills are per variant, not per family.
 14. Cartesian is public/external mutators × value sinks; top-N auto-queue as G3 tests.
 15. Map intel/PDF excerpts to in-scope functions before a wrong-protocol kill.
+16. Always inject delay-bound value vars (`executionWindow`, `minPublishTime`, `minDelay`, …) and family sink tokens, even when Phase 2 vocab is already long. Rank `commit`/`reconcile`/`apply`/`assign`/`retry`/`evaluate`/`assess`/`renounce`/`arm` and high-EV `_` stems. Mechanism templates name the same-RC cartesian row (pledge-vs-redemption, watermark-rotation, unclamped-rebate, …) and G3-queue it.
+17. Happy-path / code-fact experiments are not coverage. `coverage_check` emits `GAP-DISTINGUISHING-*` and does not treat a G3 stall as tested.
+18. Freeze-family G4 still treats `supply unreachable` / `revert confirmed at uint max` / `astronomical` as impact, not a kill. A variant-scoped overflow kill (quoteDeposit) does not close `settleLpEpoch`.
+
+## 16. Delay-bound vocab + mechanism-named cartesian (pair-only + 99136)
+
+**Cause.** Blind2 cartesian used a 25-var Phase 2 vocab with no `executionWindow`, so 99136 was never generated. `commitOrder` / `reconcile` / `apply*` were not high-EV, so 11 crits stayed CSV-only generic rows. High-EV `_applyRouterConfigAfterOracle` was dropped as an internal.
+
+**Fix (this branch).** `list_value_vars` always merges `DELAY_BOUND_VARS` and family sink tokens. `HIGH_EV_MUTATOR_RE` includes commit/reconcile/apply/assign/retry/evaluate/assess/renounce/arm/adverse. High-EV `_` stems stay in the cartesian. `tools/pair_templates.py` names the mechanism (family + statement) instead of "fn can move var". Default G3 queue is 32.
+
+## 17. G3 stall is not coverage
+
+**Cause.** SCORE.md counted `needs-evidence` after a happy-path analog as a kill for recall. Coverage treated any experiment (including `DegradedModeLifecycle PASS`) as tested, so `GAP-HYP` disappeared.
+
+**Fix (this branch).** `tested_ids` is distinguishing-only. Happy-path/code-fact logs (`minPublishTime=commitTime+1`, `zero-hash commit PASS`, `unassigned <= NAV`, `latch works`) raise on confirm/refute and emit `GAP-DISTINGUISHING-*` plus `GAP-HYP-*` when recorded as inconclusive.
+
+## 18. Real overflow kill language is freeze impact
+
+**Cause.** Blind2 G4 evidence said "supply unreachable; revert confirmed at uint max; astronomical". Fix 11's regex missed some of that phrasing, and a family-level overflow kill still threatened `settleLpEpoch` (99075) after `quoteDepositFromState` (98172).
+
+**Fix (this branch).** `UNREACHABLE_RE` / `FREEZE_HYP_RE` include the Blind2 phrases. Combined with fix 13, an overflow BLOCKS check survives (or is variant-scoped), never a family-wide disprove.

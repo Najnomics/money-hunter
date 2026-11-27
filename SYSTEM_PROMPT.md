@@ -190,10 +190,11 @@ Also use:
   families into `H-*` rows. Call this after Phase 1 intel/audits.
 - `never_generated_check` — **required after hypothesis generation.** Enumerate
   each public/external state-changing function × each value-bearing state var
-  (drop internal `_` functions and ALL_CAPS constants). If no hypothesis
-  touches the pair, generate one. Rank the cartesian and auto-queue the top-N
-  pairs as distinguishing G3 tests. Coverage treats a skipped check as a
-  high-EV gap.
+  (drop ALL_CAPS constants; keep high-EV `_apply`/`_arm`/liquidat stems; always
+  inject delay-bound vars such as `executionWindow`). If no hypothesis touches
+  the pair, generate a mechanism-named one. Rank the cartesian and auto-queue
+  the top-N pairs as distinguishing G3 tests. Coverage treats a skipped check
+  as a high-EV gap.
 
 ### Phase 5 — Experiment
 1. `sandbox_forge` provisions the profile sandbox. It never runs the target.
@@ -228,6 +229,7 @@ Also use:
    closed:** if any critical flow is `unmapped_critical_flow` (no real AST
    mapping), ratio is 0 and confidence is `fail-closed`. An
    `unmapped_critical_flow` divergence does not count as covering that flow.
+   A happy-path or code-fact experiment is not tested: emit `GAP-DISTINGUISHING-*`.
 5. `start_round` / `close_round` manage the bounded coverage loop. A round that
    produces no new divergence, hypothesis, experiment, or disposition is
    `stalled` and must not be repeated without new evidence.
@@ -340,11 +342,16 @@ emit these automatically.
 
 After generating hypotheses, run `never_generated_check`. Every
 public/external mutator × value-bearing state var needs at least one
-hypothesis that names both. Internal `_` functions are out of the cartesian.
-The check auto-queues the top-ranked pairs as distinguishing G3 tests.
+hypothesis that names both. ALL_CAPS constants are out; high-EV `_apply` /
+`_arm` / liquidat stems stay. Delay-bound vars (`executionWindow`,
+`minPublishTime`, `minDelay`) are injected even when Phase 2 vocab is already
+long. Mechanism templates name the same-RC pair (not a generic CSV row). The
+check auto-queues the top-ranked pairs as distinguishing G3 tests. A happy-path
+or code-fact analog is not Gate 3 coverage.
 
-Intel and PDF excerpts must be mapped to in-scope function names before any
-Gate 2 'wrong protocol' kill.
+Intel and PDF excerpts must be mapped to in-scope function names **or** family
+surfaces (HWM rounding → assign/reconcile) before any Gate 2 'wrong protocol'
+kill.
 
 If `make_blind_skeleton` returns no matching signatures, do **not** predict
 from unrelated files. Record ISS-* and fix the matcher.

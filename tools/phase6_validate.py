@@ -296,7 +296,22 @@ def coverage_check(ctx: ToolContext, inp: CoverageInput) -> CoverageOutput:
     for flow_id, locations in (mapped_flows or {}).items():
         if locations:
             covered_flow_ids.add(str(flow_id))
-    tested_ids = {str(e.get("hypothesis_id")) for e in experiments if e.get("hypothesis_id")}
+    distinguishing_ids: set[str] = set()
+    happy_or_fact_ids: set[str] = set()
+    for experiment in experiments:
+        hid = str(experiment.get("hypothesis_id") or "")
+        if not hid:
+            continue
+        klass = infer_experiment_class(
+            declared=str(experiment.get("experiment_class") or ""),
+            observation=str(experiment.get("observation") or ""),
+            command=str(experiment.get("command") or ""),
+        )
+        if klass == "distinguishing":
+            distinguishing_ids.add(hid)
+        elif klass in {"happy-path", "code-fact"}:
+            happy_or_fact_ids.add(hid)
+    tested_ids = distinguishing_ids
     disproof_by_hyp: dict[str, list[dict]] = {}
     for disproof in disproofs:
         disproof_by_hyp.setdefault(str(disproof.get("hypothesis_id")), []).append(disproof)
@@ -371,6 +386,21 @@ def coverage_check(ctx: ToolContext, inp: CoverageInput) -> CoverageOutput:
                 )
             )
 
+    for hid in sorted(happy_or_fact_ids - distinguishing_ids):
+        gaps.append(
+            GapRef(
+                id=f"GAP-DISTINGUISHING-{hid}",
+                type="distinguishing",
+                description=(
+                    f"Hypothesis {hid} was only probed with a happy-path or code-fact analog. "
+                    "That is not Gate 3 coverage; run the distinguishing attack."
+                ),
+                next_phase=5,
+                next_tool="invariant_tester",
+                ev_rank=80,
+            )
+        )
+
     for hypothesis in hypotheses:
         hypothesis_id = str(hypothesis.get("id"))
         if hypothesis_id not in tested_ids:
@@ -378,7 +408,7 @@ def coverage_check(ctx: ToolContext, inp: CoverageInput) -> CoverageOutput:
                 GapRef(
                     id=f"GAP-HYP-{hypothesis_id}",
                     type="hypothesis",
-                    description=f"Hypothesis {hypothesis_id} has no executed experiment.",
+                    description=f"Hypothesis {hypothesis_id} has no distinguishing experiment.",
                     next_phase=5,
                     next_tool="invariant_tester",
                     ev_rank=65,

@@ -18,6 +18,12 @@ from schemas.phase4 import Hypothesis
 from schemas.phase5 import Experiment
 from tools._shared import existing_ids, next_id, require_divergence, source_exts
 from tools.gate_policy import distinguishing_scaffold
+from tools.pair_templates import (
+    DELAY_BOUND_VARS,
+    family_sink_tokens,
+    match_pair_template,
+    template_rank_bonus,
+)
 from tools.phase3_divergence import GETTER_OR_MODIFIER, SINK_WORDS, VIEWISH_SETTLEMENT
 from tools.protocol_families import PROTOCOL_FAMILIES, ProtocolFamily, families_for_battery
 from tools.scope_map import evidence_for_mapping, map_excerpt_to_surfaces
@@ -25,8 +31,9 @@ from tools.scope_map import evidence_for_mapping, map_excerpt_to_surfaces
 VALUE_BEARING_RE = re.compile(
     r"(asset|share|balance|supply|reserve|nav|principal|claim|bounty|margin|"
     r"stake|liquidity|debt|collateral|fee|yield|price|hwm|watermark|"
-    r"unassigned|escrow|pledge|receipt|rebate|accrual|premium|surplus|"
-    r"deficit|equity|tranche|deposit|withdraw|mint|burn|oracle|mode)",
+    r"unassigned|escrow|pledge|receipt|rebate|accrual|accrued|premium|surplus|"
+    r"deficit|equity|tranche|deposit|withdraw|mint|burn|oracle|mode|"
+    r"window|delay|latency|settlement|basket|hash|config|treasury)",
     re.I,
 )
 STORAGE_DECL_RE = re.compile(
@@ -42,7 +49,9 @@ PAIR_MARK = "pair:"
 CONSTANT_RE = re.compile(r"^[A-Z][A-Z0-9_]+$")
 HIGH_EV_MUTATOR_RE = re.compile(
     r"(deposit|redeem|mint|burn|withdraw|execute|settle|liquidat|harvest|"
-    r"claim|stake|unstake|borrow|repay|addMargin|close|cancel|fill)",
+    r"claim|stake|unstake|borrow|repay|addMargin|close|cancel|fill|"
+    r"commit|assign|reconcile|evaluate|assess|retry|apply|protect|"
+    r"rotate|recap|renounce|request|arm|adverse)",
     re.I,
 )
 
@@ -349,11 +358,18 @@ def _family_for_text(text: str) -> ProtocolFamily | None:
 
 
 def is_public_mutator(surface: dict) -> bool:
-    """Public/external state-changing functions only. Drop `_` internals and ALL_CAPS constants."""
+    """Public/external state-changing functions, plus high-EV `_` stems.
+
+    ALL_CAPS constants stay out. Bare `_helper` internals stay out unless the
+    stem matches a high-EV mutator (apply/commit/settle/liquidat/arm/…) so
+    rotation/watermark pairs are not CSV-only.
+    """
     name = str(surface.get("name") or "")
     if not name or name.lower() in SKIP_FNS:
         return False
-    if name.startswith("_") or CONSTANT_RE.match(name):
+    if CONSTANT_RE.match(name):
+        return False
+    if name.startswith("_") and not HIGH_EV_MUTATOR_RE.search(name):
         return False
     kind = str(surface.get("kind") or "function")
     if kind not in {"function", "method", "entrypoint", "route"}:
@@ -393,7 +409,10 @@ def list_value_vars(ctx: ToolContext) -> list[str]:
             return
         if name.lower() in {"i", "j", "x", "y", "ok", "ret", "data", "self", "this"}:
             return
-        if not VALUE_BEARING_RE.search(name) and name not in _vocab_forced(ctx):
+        forced = {n.lower() for n in _vocab_forced(ctx)} | {t.lower() for t in DELAY_BOUND_VARS} | {
+            t.lower() for t in family_sink_tokens()
+        }
+        if not VALUE_BEARING_RE.search(name) and name.lower() not in forced:
             return
         seen.add(name.lower())
         names.append(name)
@@ -412,6 +431,12 @@ def list_value_vars(ctx: ToolContext) -> list[str]:
             _add(var)
         for var in flow.get("state_touched") or []:
             _add(var)
+    # Delay-bound + family sinks are injected even when Phase 2 vocab is already
+    # long. Blind2's 25-var list omitted executionWindow (99136).
+    for token in DELAY_BOUND_VARS:
+        _add(token)
+    for token in family_sink_tokens():
+        _add(token)
 
     if len(names) < 2:
         for path in _scan_source(ctx)[:80]:
@@ -463,9 +488,16 @@ def _pair_rank(function: str, var: str) -> int:
         score += 2
     if VALUE_BEARING_RE.search(var):
         score += 3
-    if re.search(r"(sharePrice|totalSupply|nav|hwm|watermark|collateral|margin)", var, re.I):
+    if re.search(
+        r"(sharePrice|totalSupply|nav|hwm|watermark|collateral|margin|"
+        r"freeSettlement|executionWindow|minPublishTime|acceptedBasket|"
+        r"vpiRebate|pledge|unassigned|degradedMode)",
+        var,
+        re.I,
+    ):
         score += 4
-    if function.startswith("_"):
+    score += template_rank_bonus(function, var)
+    if function.startswith("_") and not HIGH_EV_MUTATOR_RE.search(function):
         score -= 50
     return score
 
@@ -494,19 +526,33 @@ def hypotheses_for_uncovered_pairs(
         cite = ""
         if surface.get("file"):
             cite = f"{surface.get('file')}:{surface.get('line') or 1}"
-        statement = (
-            f"State-changing `{fn}` can move value-bearing `{var}` in a way that "
-            "breaks conservation, share pricing, or solvency."
-        )
-        prediction = (
-            f"Call `{fn}` with attacker-controlled inputs while measuring `{var}` "
-            "before and after, including a second actor who transacts on the new value. "
-            f"If `{var}` is unchanged or the second actor cannot extract, the hypothesis is false."
-        )
-        evidence = [
-            f"[DEDUCED] {PAIR_MARK}{fn}::{var}",
-            f"[CODE] {cite}" if cite else f"[DEDUCED] mutator {fn}",
-        ]
+        template = match_pair_template(fn, var)
+        if template:
+            statement = template.statement.format(fn=fn, var=var)
+            prediction = template.prediction.format(fn=fn, var=var)
+            family = template.family
+            evidence = [
+                f"[DEDUCED] {PAIR_MARK}{fn}::{var}",
+                f"[DEDUCED] pair-template:{template.id}",
+                f"[CODE] {cite}" if cite else f"[DEDUCED] mutator {fn}",
+            ]
+            title = f"{template.id}: {fn} x {var}"
+        else:
+            statement = (
+                f"State-changing `{fn}` can move value-bearing `{var}` in a way that "
+                "breaks conservation, share pricing, or solvency."
+            )
+            prediction = (
+                f"Call `{fn}` with attacker-controlled inputs while measuring `{var}` "
+                "before and after, including a second actor who transacts on the new value. "
+                f"If `{var}` is unchanged or the second actor cannot extract, the hypothesis is false."
+            )
+            family = None
+            evidence = [
+                f"[DEDUCED] {PAIR_MARK}{fn}::{var}",
+                f"[CODE] {cite}" if cite else f"[DEDUCED] mutator {fn}",
+            ]
+            title = f"{fn} x {var}"
         out.append(
             _make_hypothesis(
                 ctx,
@@ -517,7 +563,8 @@ def hypotheses_for_uncovered_pairs(
                 prediction=prediction,
                 sink=var,
                 evidence=evidence,
-                title=f"{fn} x {var}",
+                family=family,
+                title=title,
                 variant=f"{fn}::{var}",
             )
         )
@@ -527,7 +574,7 @@ def hypotheses_for_uncovered_pairs(
 def queue_distinguishing_g3(
     ctx: ToolContext,
     *,
-    max_queue: int = 8,
+    max_queue: int = 32,
     pairs: list[tuple[str, str, dict]] | None = None,
     hypotheses: Iterable[dict | Hypothesis] | None = None,
     tool: str = "never_generated_check",

@@ -11,31 +11,41 @@ FREEZE_HYP_RE = re.compile(
     r"(overflow|underflow|uint256\.?max|type\(\s*uint|virtual[ -]?offset|"
     r"virtual[ -]?shares|share[ -]?supply|convertToShares|convertToAssets|"
     r"\bfreeze|\bfrozen|cannot (?:mint|deposit|redeem|withdraw|convert)|"
-    r"denial.of.service|\bdos\b|value flow|blocks? (?:a )?value)",
+    r"denial.of.service|\bdos\b|value flow|blocks? (?:a )?value|"
+    r"paid freeze|terminal supply|near[- ]zero principal)",
     re.I,
 )
 UNREACHABLE_RE = re.compile(
     r"(unreachable|astronomical|too (?:expensive|large|big)|not (?:practical|reachable)|"
     r"supply too|cannot be reached|would revert|reverts? (?:on|when|before|at)|"
-    r"overflow (?:protect|guard|check)|cap (?:makes|renders) (?:it )?unreachable)",
+    r"overflow (?:protect|guard|check)|cap (?:makes|renders) (?:it )?unreachable|"
+    r"supply unreachable|revert confirmed at uint)",
     re.I,
 )
 HAPPY_PATH_RE = re.compile(
     r"(happy[ -]?path|round[ -]?trip|seeded fixture|cap is live|"
     r"assert\s*True|intended spec|while solvent|solvent (?:user|path)|"
-    r"admin (?:deposits|seeds)|documented behaviour as designed)",
+    r"admin (?:deposits|seeds)|documented behaviour as designed|"
+    r"latch works|degradedmodelifecycle|zero-hash commit|"
+    r"min\(\s*raw\s*,\s*accounted\s*\)|excludes mint-to-pool|"
+    r"seeded fixture not degraded|intended latch)",
     re.I,
 )
 CODE_FACT_RE = re.compile(
     r"(code[ -]?fact|natspec|read the (?:source|code)|static inspection|"
     r"no execution|line \d+ (?:says|contains|shows)|comment says|"
-    r"source review(?: only)?)",
+    r"source review(?: only)?|minPublishTime\s*=\s*commitTime|"
+    r"commitTime\s*\+\s*1|unassigned\s*<=\s*NAV|reserved bucket\s*<=\s*NAV|"
+    r"design-wrong DIV)",
     re.I,
 )
 DISTINGUISHING_RE = re.compile(
     r"(attacker|vm\.prank|prank\(|adversarial|first[ -]?tick|zero[ -]?state|"
     r"zero[ -]?nav|second actor|distinguishing|unprivileged|"
-    r"ordering (?:attack|swap)|empty (?:vault|pool|market))",
+    r"ordering (?:attack|swap)|empty (?:vault|pool|market)|"
+    r"false[- ](?:trip|latch)|addMargin rescue|macro[- ]tick|"
+    r"VIRTUAL_SHARES|near[- ]zero principal|fee[- ]share|"
+    r"assignUnassignedAssets at 0)",
     re.I,
 )
 WRONG_PROTOCOL_RE = re.compile(

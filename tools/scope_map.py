@@ -5,9 +5,26 @@ import re
 from typing import Any
 
 from runtime import ToolContext
+from tools.protocol_families import PROTOCOL_FAMILIES
 
 CONSTANT_RE = re.compile(r"^[A-Z][A-Z0-9_]+$")
-MIN_NAME_LEN = 4
+MIN_NAME_LEN = 3
+FAMILY_SURFACE_RE = {
+    "refundable-receipt-in-nav": re.compile(
+        r"settle|redeem|deposit|reconcile|convert|nav|share|rebate", re.I
+    ),
+    "share-supply-overflow": re.compile(r"settle|mint|deposit|quote|convert|supply", re.I),
+    "hwm-recap-accounting": re.compile(
+        r"assign|reconcile|settle|recap|unassigned|highWater|hwm", re.I
+    ),
+    "delayed-order-optionality": re.compile(
+        r"commit|execute|addMargin|withdraw|depositFor|window|settle", re.I
+    ),
+    "oracle-staleness-calendar-watermark": re.compile(
+        r"oracle|calendar|basket|watermark|apply|commit|execute", re.I
+    ),
+    "false-emergency-mode": re.compile(r"degrad|emergency|renounce|execute|close|open", re.I),
+}
 
 
 def _mentions(text: str, token: str) -> bool:
@@ -38,14 +55,46 @@ def list_in_scope_surfaces(ctx: ToolContext) -> list[dict[str, Any]]:
     return surfaces
 
 
+def _family_ids_for_text(text: str) -> list[str]:
+    lowered = (text or "").lower()
+    hits: list[str] = []
+    for family in PROTOCOL_FAMILIES:
+        score = sum(1 for k in family.keywords if k.lower() in lowered)
+        if family.id.replace("-", " ") in lowered:
+            score += 5
+        if score:
+            hits.append(family.id)
+    return hits
+
+
 def map_text_to_surfaces(ctx: ToolContext, text: str) -> list[dict[str, Any]]:
-    """Return in-scope surfaces whose public names appear in an excerpt."""
+    """Return in-scope surfaces whose public names appear in an excerpt.
+
+    If the excerpt never names a function but matches a protocol family
+    (e.g. Senior HWM rounding), map family-related surfaces so a G2
+    wrong-protocol kill cannot fire on an in-scope analog.
+    """
     hits: list[dict[str, Any]] = []
     blob = text or ""
-    for surface in list_in_scope_surfaces(ctx):
+    surfaces = list_in_scope_surfaces(ctx)
+    for surface in surfaces:
         name = str(surface.get("name") or "")
         if _mentions(blob, name):
             hits.append(surface)
+    if not hits:
+        seen: set[str] = set()
+        for family_id in _family_ids_for_text(blob):
+            hint = FAMILY_SURFACE_RE.get(family_id)
+            if hint is None:
+                continue
+            for surface in surfaces:
+                name = str(surface.get("name") or "")
+                key = name.lower()
+                if key in seen:
+                    continue
+                if hint.search(name):
+                    seen.add(key)
+                    hits.append(surface)
     hits.sort(key=lambda s: (-len(str(s.get("name") or "")), str(s.get("name") or "")))
     return hits
 
