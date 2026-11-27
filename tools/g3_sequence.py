@@ -29,6 +29,17 @@ def _re(pattern: str) -> re.Pattern[str]:
 
 STRATEGIES: tuple[SequenceStrategy, ...] = (
     SequenceStrategy(
+        id="receipt_open",
+        when_fn=_re(r"settle|reconcile"),
+        when_var=_re(r"sharePrice|totalAssets|\bnav\b|rebate|accrued|pledge"),
+        when_family=frozenset({"refundable-receipt-in-nav"}),
+        setup="_openFilled(ATTACKER, _long(), 60);",
+        why=(
+            "NAV/sharePrice tests need a reclaimable receipt in flight. "
+            "Open first so the outsider epoch is priced against that receipt."
+        ),
+    ),
+    SequenceStrategy(
         id="epoch_advance",
         when_fn=_re(r"settle|epoch|reconcile|requestDeposit|requestRedeem"),
         when_var=_re(r"."),
@@ -40,16 +51,12 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
-        id="receipt_open",
-        when_fn=_re(r"settle|reconcile"),
-        when_var=_re(r"sharePrice|totalAssets|\bnav\b|rebate|accrued|pledge"),
-        when_family=frozenset({"refundable-receipt-in-nav"}),
-        setup="_snapshotNav(); _openFilled(ATTACKER, _long(), 60);",
-        why=(
-            "NAV/sharePrice tests need a reclaimable receipt in flight. "
-            "Snapshot incumbent assets after epoch warp, then open a filled "
-            "position so the receipt can sit in NAV."
-        ),
+        id="filled_position",
+        when_fn=_re(r"executeClose|addMargin|settleTraderClaim|retryPosition"),
+        when_var=_re(r"rebate|sharePrice|traderClaim|freeSettlement|liquidationReserve"),
+        when_family=frozenset(),
+        setup="_openFilled(ATTACKER, _long(), 60);",
+        why="Close/margin/claim probes need a live filled position, not an empty book.",
     ),
     SequenceStrategy(
         id="unowned_residual",

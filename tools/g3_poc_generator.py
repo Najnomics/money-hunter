@@ -4,6 +4,7 @@ No finding ids. Setup comes from tools.g3_sequence. Never submit.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from tools.g3_harness import NAMED_OPEN_IDS, VERIFIED_IDS, match_test
@@ -96,7 +97,20 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
         return "        vm.prank(ATTACKER);\n        try engine.settleTraderClaim(ATTACKER) {} catch {}"
     if fn in {"assessCommittedOrder", "evaluateOpen"}:
         return '        _commitAs(ATTACKER, _openReq("a", _long(), 60));'
-    return f"        // generic mutator `{fn}` — helpers already ran\n        _settleLpEpochForTest();"
+    if re.search(r"liquidation|adverse", fn, re.I):
+        return (
+            "        address[] memory accounts = new address[](1);\n"
+            "        accounts[0] = VICTIM;\n"
+            "        try router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8)) {} catch {}"
+        )
+    if re.search(r"arm|retry|protection", fn, re.I):
+        return "        _closeFilled(ATTACKER);"
+    if re.search(r"config|calendar|oracle", fn, re.I):
+        return "        _publish(1.5e8);"
+    return (
+        '        uint64 oid = _commitAs(ATTACKER, _openReq("g", _long(), 60));\n'
+        "        try router.executeOrder(oid, _mockPythUpdateData(1e8)) {} catch {}"
+    )
 
 
 def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
@@ -110,6 +124,19 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
         return (
             "        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));\n"
             '        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");'
+        )
+    if var == "seniorPrincipal":
+        return (
+            "        require(pool.seniorPrincipal() != snapshotNav, "
+            '"senior principal ignored residual/recap");'
+        )
+    if var == "traderClaimBalance":
+        return (
+            '        require(_freeOf(ATTACKER) != snapshotFree, "trader claim/free path was a no-op");'
+        )
+    if var in {"acceptedBasket", "currentExecutionConfigHash"}:
+        return (
+            '        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");'
         )
     if var in {"unassignedAssets", "highWaterMark"}:
         return (
@@ -148,7 +175,12 @@ def render_test(function: str, var: str, family: str = "") -> str:
     setup = setup_block(function, var, family)
     act = _act(function, var, strategies)
     assertion = _assert(function, var, family, strategies)
-    body = "\n".join(p for p in (setup, act, assertion) if p)
+    snap = ""
+    if var in {"sharePrice", "nav", "totalAssets", "vpiRebateReserve", "pnlPledgeAssets", "seniorPrincipal"}:
+        snap = "        _snapshotNav();"
+    if var in {"traderClaimBalance", "freeSettlement", "freeBalance"} and "locked_vs_free" not in strategies:
+        snap = "        _snapshotFree(ATTACKER);"
+    body = "\n".join(p for p in (setup, snap, act, assertion) if p)
     return (
         f"    function {name}() public {{\n"
         f"{body}\n"

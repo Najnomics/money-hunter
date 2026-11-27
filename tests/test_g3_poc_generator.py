@@ -20,6 +20,8 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_snapshotNav", src)
         self.assertIn("snapshotVictim", src)
         self.assertIn("incumbent assets ignored reclaimable receipt", src)
+        self.assertLess(src.index("_openFilled"), src.index("_queueDeposit"))
+        self.assertLess(src.index("_warpToDepositEpoch"), src.index("_snapshotNav"))
 
     def test_assign_unassigned_emits_residual_seed(self):
         src = render_test("assignUnassignedAssets", "unassignedAssets", "hwm-recap-accounting")

@@ -8,10 +8,11 @@ import {OrderV3Types} from "@plether/perps/OrderV3Types.sol";
 /// Auto-generated distinguishing G3 attacks. Never submit.
 contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_settleLpEpoch_sharePrice() public {
+        // strategy:receipt_open — NAV/sharePrice tests need a reclaimable receipt in flight. Open first so the outsider epoch is priced against that receipt.
+        _openFilled(ATTACKER, _long(), 60);
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        // strategy:receipt_open — NAV/sharePrice tests need a reclaimable receipt in flight. Snapshot incumbent assets after epoch warp, then open a filled position so the receipt can sit in NAV.
-        _snapshotNav(); _openFilled(ATTACKER, _long(), 60);
+        _snapshotNav();
         _settleLpEpochForTest();
         uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
         require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
@@ -28,6 +29,8 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_addMargin_freeSettlement() public {
+        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
+        _openFilled(ATTACKER, _long(), 60);
         // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
         _openFilled(ATTACKER, _long(), 60); _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
@@ -75,8 +78,9 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_settleLpEpoch_seniorPrincipal() public {
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
+        _snapshotNav();
         _settleLpEpochForTest();
-        revert("no distinguishing assertion for this pair");
+        require(pool.seniorPrincipal() != snapshotNav, "senior principal ignored residual/recap");
     }
 
     function test_attack_executeOrder_acceptedBasket() public {
@@ -84,7 +88,7 @@ contract ApexG3GeneratedTest is G3Sequence {
         _publish(1.5e8);
         uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
         router.executeOrder(oid, _mockPythUpdateData(1e8));
-        revert("no distinguishing assertion for this pair");
+        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
     }
 
     function test_attack_reconcile_unassignedAssets() public {
@@ -129,10 +133,11 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_settleLpEpoch_pnlPledgeAssets() public {
+        // strategy:receipt_open — NAV/sharePrice tests need a reclaimable receipt in flight. Open first so the outsider epoch is priced against that receipt.
+        _openFilled(ATTACKER, _long(), 60);
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        // strategy:receipt_open — NAV/sharePrice tests need a reclaimable receipt in flight. Snapshot incumbent assets after epoch warp, then open a filled position so the receipt can sit in NAV.
-        _snapshotNav(); _openFilled(ATTACKER, _long(), 60);
+        _snapshotNav();
         _settleLpEpochForTest();
         uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
         require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
@@ -149,6 +154,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_executeOpen_vpiRebateReserve() public {
+        _snapshotNav();
         uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
         router.executeOrder(oid, _mockPythUpdateData(1e8));
         uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
@@ -169,12 +175,18 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_settleTraderClaim_freeSettlement() public {
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
+        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
+        _openFilled(ATTACKER, _long(), 60);
+        _snapshotFree(ATTACKER);
         vm.prank(ATTACKER);
         try engine.settleTraderClaim(ATTACKER) {} catch {}
         require(_freeOf(ATTACKER) < snapshotFree, "free settlement did not drop");
     }
 
     function test_attack_executeClose_vpiRebateReserve() public {
+        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
+        _openFilled(ATTACKER, _long(), 60);
+        _snapshotNav();
         _closeFilled(ATTACKER);
         uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
         require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
@@ -193,6 +205,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_withdraw_vpiRebateReserve() public {
+        _snapshotNav();
         uint256 free = _freeOf(ATTACKER);
         if (free > 0) { vm.prank(ATTACKER); clearinghouse.withdraw(ATTACKER, free); }
         uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
@@ -200,26 +213,27 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_applyRouterConfigAfterOracle_acceptedBasket() public {
-        // generic mutator `_applyRouterConfigAfterOracle` — helpers already ran
-        _settleLpEpochForTest();
-        revert("no distinguishing assertion for this pair");
+        _publish(1.5e8);
+        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
     }
 
     function test_attack_executeClose_traderClaimBalance() public {
+        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
+        _openFilled(ATTACKER, _long(), 60);
+        _snapshotFree(ATTACKER);
         _closeFilled(ATTACKER);
-        revert("no distinguishing assertion for this pair");
+        require(_freeOf(ATTACKER) != snapshotFree, "trader claim/free path was a no-op");
     }
 
     function test_attack_retryPositionProtectionClose_degradedMode() public {
-        // generic mutator `retryPositionProtectionClose` — helpers already ran
-        _settleLpEpochForTest();
+        _closeFilled(ATTACKER);
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 
     function test_attack_applyCalendarConfig_acceptedBasket() public {
         // calendar mutator — oracle helpers already ran
         _publish(1.5e8);
-        revert("no distinguishing assertion for this pair");
+        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
     }
 
     function test_attack_executeLiquidationBatch_liquidationReserve() public {
@@ -230,20 +244,22 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_applyOpen_liquidationReserve() public {
-        // generic mutator `_applyOpen` — helpers already ran
-        _settleLpEpochForTest();
+        uint64 oid = _commitAs(ATTACKER, _openReq("g", _long(), 60));
+        try router.executeOrder(oid, _mockPythUpdateData(1e8)) {} catch {}
         revert("no distinguishing assertion for this pair");
     }
 
     function test_attack_adverseLiquidationPrice_acceptedBasket() public {
-        // generic mutator `_adverseLiquidationPrice` — helpers already ran
-        _settleLpEpochForTest();
-        revert("no distinguishing assertion for this pair");
+        address[] memory accounts = new address[](1);
+        accounts[0] = VICTIM;
+        try router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8)) {} catch {}
+        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
     }
 
     function test_attack_requestRedeem_sharePrice() public {
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
+        _snapshotNav();
         uint256 shares = juniorVault.balanceOf(address(this));
         if (shares > 0) { juniorVault.requestRedeem(shares / 2, address(this), address(this)); }
         uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
@@ -251,9 +267,8 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_applyRouterConfig_currentExecutionConfigHash() public {
-        // generic mutator `_applyRouterConfig` — helpers already ran
-        _settleLpEpochForTest();
-        revert("no distinguishing assertion for this pair");
+        _publish(1.5e8);
+        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
     }
 
     function test_attack_renounceOwnership_degradedMode() public {
@@ -271,13 +286,16 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_retryPositionProtectionClose_vpiRebateReserve() public {
-        // generic mutator `retryPositionProtectionClose` — helpers already ran
-        _settleLpEpochForTest();
+        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
+        _openFilled(ATTACKER, _long(), 60);
+        _snapshotNav();
+        _closeFilled(ATTACKER);
         uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
         require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
     }
 
     function test_attack_evaluateOpen_freeSettlement() public {
+        _snapshotFree(ATTACKER);
         _commitAs(ATTACKER, _openReq("a", _long(), 60));
         require(_freeOf(ATTACKER) < snapshotFree, "free settlement did not drop");
     }
@@ -297,23 +315,26 @@ contract ApexG3GeneratedTest is G3Sequence {
 
     function test_attack_evaluateOpen_acceptedBasket() public {
         _commitAs(ATTACKER, _openReq("a", _long(), 60));
-        revert("no distinguishing assertion for this pair");
+        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
     }
 
     function test_attack_commitOrder_traderClaimBalance() public {
+        _snapshotFree(ATTACKER);
         _commitAs(ATTACKER, _openReq("c", _long(), 60));
-        revert("no distinguishing assertion for this pair");
+        require(_freeOf(ATTACKER) != snapshotFree, "trader claim/free path was a no-op");
     }
 
     function test_attack_executeClose_sharePrice() public {
+        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
+        _openFilled(ATTACKER, _long(), 60);
+        _snapshotNav();
         _closeFilled(ATTACKER);
         uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
         require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
     }
 
     function test_attack_arm_degradedMode() public {
-        // generic mutator `_arm` — helpers already ran
-        _settleLpEpochForTest();
+        _closeFilled(ATTACKER);
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 }

@@ -19,9 +19,8 @@ class SequenceSelectionTests(unittest.TestCase):
         src = setup_block("settleLpEpoch", "sharePrice", "refundable-receipt-in-nav")
         self.assertIn("_queueDeposit", src)
         self.assertIn("_warpToDepositEpoch", src)
-        self.assertIn("_snapshotNav", src)
         self.assertIn("_openFilled", src)
-        self.assertLess(src.index("_warpToDepositEpoch"), src.index("_snapshotNav"))
+        self.assertLess(src.index("_openFilled"), src.index("_queueDeposit"))
 
     def test_assign_unassigned_needs_unowned_residual_not_account_excess(self):
         # Root cause: mint-to-pool + accountExcess left unassigned=0.
@@ -68,7 +67,7 @@ class SequenceSelectionTests(unittest.TestCase):
             self.assertNotIn(finding, src)
 
     def test_every_strategy_has_a_why(self):
-        self.assertGreaterEqual(len(STRATEGIES), 12)
+        self.assertGreaterEqual(len(STRATEGIES), 13)
         for strat in STRATEGIES:
             self.assertTrue(strat.why.strip())
 

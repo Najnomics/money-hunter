@@ -104,8 +104,8 @@ abstract contract G3Sequence is BasePerpTest {
         uint256 t = lastDepositRequest == 0
             ? block.timestamp + pool.LP_EPOCH_DURATION()
             : juniorVault.depositEpochStart(lastDepositRequest);
-        if (block.timestamp < t) {
-            vm.warp(t);
+        if (block.timestamp < t + 1) {
+            vm.warp(t + 1);
         }
         uint256 mark = engine.lastMarkPrice();
         vm.prank(address(router));
