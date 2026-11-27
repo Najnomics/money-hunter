@@ -68,8 +68,10 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_executeOpen_vpiRebateReserve() public {
+        // strategy:skew_seed — Rebate reserve is max(-vpiAccrued, 0). A first same-side open pays positive VPI and never locks the bucket. Seed opposite-side skew first.
+        _openFilled(VICTIM, _long(), 60);
         _snapshotRebate(ATTACKER);
-        uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
+        uint64 oid = _commitAs(ATTACKER, _openReq("x", _short(), 60));
         router.executeOrder(oid, _mockPythUpdateData(1e8));
         require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");
     }
@@ -108,8 +110,8 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_executeClose_vpiRebateReserve() public {
-        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
-        _openFilled(ATTACKER, _long(), 60);
+        // strategy:rebate_held — Close/withdraw rebate probes need an already-locked negative-VPI reserve from a skew-reducing open, not a lone long.
+        _openFilled(VICTIM, _long(), 60); _openFilled(ATTACKER, _short(), 60);
         _snapshotRebate(ATTACKER);
         _closeFilled(ATTACKER);
         require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");
@@ -128,8 +130,8 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_withdraw_vpiRebateReserve() public {
-        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
-        _openFilled(ATTACKER, _long(), 60);
+        // strategy:rebate_held — Close/withdraw rebate probes need an already-locked negative-VPI reserve from a skew-reducing open, not a lone long.
+        _openFilled(VICTIM, _long(), 60); _openFilled(ATTACKER, _short(), 60);
         _snapshotRebate(ATTACKER);
         uint256 free = _freeOf(ATTACKER);
         if (free > 0) { vm.prank(ATTACKER); clearinghouse.withdraw(ATTACKER, free); }
@@ -219,8 +221,8 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_retryPositionProtectionClose_vpiRebateReserve() public {
-        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
-        _openFilled(ATTACKER, _long(), 60);
+        // strategy:rebate_held — Close/withdraw rebate probes need an already-locked negative-VPI reserve from a skew-reducing open, not a lone long.
+        _openFilled(VICTIM, _long(), 60); _openFilled(ATTACKER, _short(), 60);
         _snapshotRebate(ATTACKER);
         _closeFilled(ATTACKER);
         require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");

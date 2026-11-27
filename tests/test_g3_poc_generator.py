@@ -35,8 +35,11 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_rebateOf(ATTACKER)", src)
         self.assertNotIn("snapshotVictim", src)
         src_w = render_test("withdraw", "vpiRebateReserve", "refundable-receipt-in-nav")
-        self.assertIn("_openFilled", src_w)
+        self.assertIn("_openFilled(ATTACKER, _short()", src_w)
         self.assertIn("_snapshotRebate(ATTACKER)", src_w)
+        src_o = render_test("executeOpen", "vpiRebateReserve", "refundable-receipt-in-nav")
+        self.assertIn("_openFilled(VICTIM, _long()", src_o)
+        self.assertIn("_short()", src_o)
 
     def test_addmargin_emits_free_snapshot_and_price_print(self):
         src = render_test("addMargin", "freeSettlement", "delayed-order-optionality")

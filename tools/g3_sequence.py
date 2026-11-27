@@ -53,7 +53,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     SequenceStrategy(
         id="filled_position",
         when_fn=_re(r"executeClose|settleTraderClaim|retryPosition|withdraw"),
-        when_var=_re(r"rebate|sharePrice|traderClaim|freeSettlement|liquidationReserve"),
+        when_var=_re(r"sharePrice|traderClaim|freeSettlement|liquidationReserve"),
         when_family=frozenset(),
         setup="_openFilled(ATTACKER, _long(), 60);",
         why="Close/margin/claim probes need a live filled position, not an empty book.",
@@ -68,6 +68,28 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
             "mint-to-pool + accountExcess books into accountedAssets / junior, "
             "so unassigned stays 0. Account the cash then reserve that slice in "
             "the unassigned bucket so reconcile cannot treat it as junior revenue."
+        ),
+    ),
+    SequenceStrategy(
+        id="skew_seed",
+        when_fn=_re(r"executeOpen|executeOrder"),
+        when_var=_re(r"rebate"),
+        when_family=frozenset(),
+        setup="_openFilled(VICTIM, _long(), 60);",
+        why=(
+            "Rebate reserve is max(-vpiAccrued, 0). A first same-side open pays "
+            "positive VPI and never locks the bucket. Seed opposite-side skew first."
+        ),
+    ),
+    SequenceStrategy(
+        id="rebate_held",
+        when_fn=_re(r"executeClose|withdraw|retry"),
+        when_var=_re(r"rebate"),
+        when_family=frozenset(),
+        setup="_openFilled(VICTIM, _long(), 60); _openFilled(ATTACKER, _short(), 60);",
+        why=(
+            "Close/withdraw rebate probes need an already-locked negative-VPI "
+            "reserve from a skew-reducing open, not a lone long."
         ),
     ),
     SequenceStrategy(

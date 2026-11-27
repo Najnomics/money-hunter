@@ -54,8 +54,9 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             )
         return '        _commitAs(ATTACKER, _openReq("c", _long(), 60));'
     if fn in {"executeOrder", "executeOpen"}:
+        side = "_short()" if "skew_seed" in strategies else "_long()"
         return (
-            '        uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));\n'
+            f'        uint64 oid = _commitAs(ATTACKER, _openReq("x", {side}, 60));\n'
             "        router.executeOrder(oid, _mockPythUpdateData(1e8));"
         )
     if fn == "executeClose":
