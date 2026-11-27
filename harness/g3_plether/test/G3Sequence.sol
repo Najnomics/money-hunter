@@ -20,6 +20,7 @@ abstract contract G3Sequence is BasePerpTest {
     uint256 internal snapshotNav;
     uint256 internal snapshotVictim;
     uint256 internal lastDepositRequest;
+    uint256 internal openNonce;
 
     function _riskParams() internal pure override returns (CfdTypes.RiskParams memory) {
         return CfdTypes.RiskParams({
@@ -85,7 +86,8 @@ abstract contract G3Sequence is BasePerpTest {
     }
 
     function _openFilled(address who, CfdTypes.Side side, uint32 window) internal returns (uint64 oid) {
-        oid = _commitAs(who, _openReq(bytes32(uint256(uint160(who)) ^ uint256(window)), side, window));
+        openNonce += 1;
+        oid = _commitAs(who, _openReq(bytes32(openNonce ^ uint256(uint160(who))), side, window));
         router.executeOrder(oid, _mockPythUpdateData(1e8));
     }
 
