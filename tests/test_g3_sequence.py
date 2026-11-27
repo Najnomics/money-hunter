@@ -30,6 +30,15 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("_seedUnownedResidual", src)
         self.assertNotIn("pool.accountExcess", src)
 
+    def test_evaluate_open_freesettlement_prints_then_snapshots(self):
+        chosen = select_strategies("evaluateOpen", "freeSettlement", "delayed-order-optionality")
+        self.assertIn("locked_vs_free", chosen)
+        self.assertIn("price_print_then_mutate", chosen)
+        src = setup_block("evaluateOpen", "freeSettlement", "delayed-order-optionality")
+        self.assertIn("_snapshotFree", src)
+        self.assertIn("_publish", src)
+        self.assertLess(src.index("_publish"), src.index("_snapshotFree"))
+
     def test_addmargin_freesettlement_snapshots_free_after_price_print(self):
         # Root cause: total balance still included committed margin.
         chosen = select_strategies("addMargin", "freeSettlement", "delayed-order-optionality")

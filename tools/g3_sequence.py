@@ -113,7 +113,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="price_print_then_mutate",
-        when_fn=_re(r"addMargin|withdraw|execute|commit"),
+        when_fn=_re(r"addMargin|withdraw|execute|commit|assess|evaluate"),
         when_var=_re(r"freeSettlement|freeBalance|executionWindow"),
         when_family=frozenset({"delayed-order-optionality"}),
         setup='_openFilled(ATTACKER, _long(), 60); _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);',
@@ -124,7 +124,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="locked_vs_free",
-        when_fn=_re(r"addMargin|withdraw|commit|execute"),
+        when_fn=_re(r"addMargin|withdraw|commit|execute|assess|evaluate"),
         when_var=_re(r"freeSettlement|freeBalance|freeAssets|locked"),
         when_family=frozenset(),
         setup="_snapshotFree(ATTACKER);",
