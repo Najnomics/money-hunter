@@ -94,10 +94,11 @@ class SequenceSelectionTests(unittest.TestCase):
     def test_execute_open_degraded_opens_into_thin_cash_not_a_second_long(self):
         chosen = select_strategies("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("thin_pool", chosen)
-        self.assertIn("drain_cash", chosen)
+        self.assertNotIn("drain_cash", chosen)
         self.assertNotIn("multi_actor_hedge", chosen)
         src = setup_block("executeOpen", "degradedMode", "false-emergency-mode")
-        self.assertIn("_thinPoolTo(10_000e6)", src)
+        self.assertIn("_thinPool();", src)
+        self.assertNotIn("_thinPoolTo(10_000e6)", src)
         self.assertNotIn("_openFilled(VICTIM", src)
 
     def test_random_deposit_total_supply_is_not_a_hedge_sequence(self):

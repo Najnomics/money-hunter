@@ -135,7 +135,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="drain_cash",
-        when_fn=_re(r"executeClose|executeOrder|executeOpen"),
+        when_fn=_re(r"executeClose|executeOrder"),
         when_var=_re(r"degradedMode|emergency"),
         when_family=frozenset({"false-emergency-mode"}),
         setup="_thinPoolTo(10_000e6);",

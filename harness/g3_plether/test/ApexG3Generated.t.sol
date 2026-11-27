@@ -246,8 +246,6 @@ contract ApexG3GeneratedTest is G3Sequence {
         _thinPool();
         // strategy:oracle_price_move — Close/execute after a material mark move, not at the seed price.
         _publish(1.5e8);
-        // strategy:drain_cash — After the hedge is open, drain pool cash well below one-side maxProfit. A close that credits the pool still leaves cash < remaining maxLiability.
-        _thinPoolTo(10_000e6);
         uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
         OrderV3Types.ExecutionResult memory execResult = router.executeOrder(oid, _mockPythUpdateData(1e8));
         require(
