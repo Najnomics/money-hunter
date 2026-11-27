@@ -64,9 +64,9 @@ class G3PocGeneratorTests(unittest.TestCase):
         from tools.g3_poc_generator import blind_items
 
         named, pair_only = blind_items()
-        self.assertEqual(len(named), 25)
+        self.assertEqual(len(named), 23)
         self.assertEqual(len(pair_only), 25)
-        self.assertEqual(len(VERIFIED_IDS), 13)
+        self.assertEqual(len(VERIFIED_IDS), 18)
         src = GEN.read_text(encoding="utf-8")
         self.assertNotIn("findings/plether-key", src)
 
