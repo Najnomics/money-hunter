@@ -30,6 +30,10 @@ Slices of 3–5 unique tests; this file is appended after each slice.
 | `adverseLiquidationPrice_acceptedBasket` | `first_tick` | 99422 | PASS | FAIL mark | HOLD |
 | `applyCalendarConfig_acceptedBasket` | `first_tick` | 98416, 97601 | PASS | FAIL mark | HOLD |
 | `applyOpen_liquidationReserve` | `pending_order` | 98795 | PASS | FAIL reserve no-op | HOLD |
+| `applyRouterConfigAfterOracle_acceptedBasket` | `first_tick` | 98014 | PASS | FAIL mark | HOLD |
+| `applyRouterConfig_currentExecutionConfigHash` | `first_tick` | 97602 | PASS | FAIL mark | HOLD |
+| `arm_degradedMode` | `margin_backing` | 99931 | PASS | FAIL did not latch | HOLD |
+| `assessCommittedOrder_freeSettlement` | `pending_order` | 97833, 98200 | PASS | FAIL SettlementFloorOrderPending | HOLD |
 
 ## Slice log
 
@@ -38,3 +42,7 @@ Slices run oldest-name first. HOLD = pin PASS + matching overlay FAIL. DEMOTED =
 ### Slice 1 (unique 1–4)
 
 4/4 HOLD. Cumulative HOLD unique 4/43.
+
+### Slice 2 (unique 5–8)
+
+4/4 HOLD including L candidate 99931 (`arm_degradedMode`). Cumulative HOLD unique 8/43.
