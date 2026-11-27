@@ -14,6 +14,9 @@ from pathlib import Path
 from fsutil import run_command
 
 PAIR_MARK = "pair:"
+# Immunefi Plether freeze (information/scope/resources pages). Never use
+# Plether-Fi/plether-core master for recall scoring.
+CONTEST_PIN = "a82d4fefb02768e5b3bddcc97dee371eee24fea8"
 FAMILY_CONTRACT: dict[str, str] = {
     "refundable-receipt-in-nav": "NavReceiptAttack",
     "share-supply-overflow": "OverflowFreezeAttack",
@@ -40,6 +43,37 @@ def harness_root() -> Path:
     return Path(__file__).resolve().parent.parent / "harness" / "g3"
 
 
+def contest_repo_root(perps: Path | None = None) -> Path:
+    perps = perps or plether_perps_root()
+    if perps.name == "perps":
+        return perps.parents[1]
+    return perps
+
+
+def pinned_head(repo: Path | None = None) -> str:
+    import subprocess
+
+    repo = repo or contest_repo_root()
+    proc = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return (proc.stdout or "").strip()
+
+
+def require_contest_pin(repo: Path | None = None) -> str:
+    head = pinned_head(repo)
+    if head != CONTEST_PIN:
+        raise RuntimeError(
+            f"Plether HEAD {head or '(missing)'} is not contest pin {CONTEST_PIN}. "
+            "Do not score against Plether-Fi main. See findings/plether-blind3/PIN.md."
+        )
+    return head
+
+
 def plether_perps_root() -> Path:
     override = os.environ.get("APEX_PLETHER_PERPS")
     if override:
@@ -52,7 +86,7 @@ def sync_plether_tests() -> Path:
     dest = plether_perps_root() / "test" / "apex_g3"
     dest.mkdir(parents=True, exist_ok=True)
     if src.exists():
-        for path in src.glob("*.t.sol"):
+        for path in src.glob("*.sol"):
             (dest / path.name).write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
     return dest
 
@@ -125,6 +159,11 @@ def run_distinguishing(
     root = plether_perps_root()
     if not (root / "foundry.toml").exists():
         empty["stderr"] = f"plether perps root missing: {root}"
+        return empty
+    try:
+        require_contest_pin(contest_repo_root(root))
+    except RuntimeError as exc:
+        empty["stderr"] = str(exc)
         return empty
     sync_plether_tests()
     forge = forge_bin()

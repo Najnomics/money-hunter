@@ -40,4 +40,6 @@ v2.0.0 Sepolia was built from `1209ca8a5b94a4fb6323c7c4585846ed93db3932`. Contes
 | SCORE-C (in progress) | same clone HEAD | generator writes into this pin | **yes** |
 | Oracle “buggy pin” | clone HEAD `a82d4fe` | `tools/g3_harness.py` `plether_perps_root()` | **yes** |
 
-No run used `Plether-Fi/plether-core` `0fc3cf5`. No re-pin or re-score is required. SCORE-B and SCORE-C stay on `a82d4fe`.
+No run used `Plether-Fi/plether-core` `0fc3cf5`. **No re-pin or re-score:** Blind3b SCORE-B and in-progress SCORE-C already ran on the contest freeze. Results do not change.
+
+`tools/g3_harness.py` `CONTEST_PIN` now refuses forge if `HEAD != a82d4fe`, so a later clone of post-audit main cannot silently become the oracle.

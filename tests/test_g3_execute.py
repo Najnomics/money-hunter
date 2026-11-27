@@ -8,7 +8,7 @@ from pathlib import Path
 from runtime import ToolError
 from schemas.phase5 import ExecuteQueuedInput
 from tests.helpers import make_ctx
-from tools.g3_harness import NAMED_OPEN_IDS, run_distinguishing
+from tools.g3_harness import CONTEST_PIN, NAMED_OPEN_IDS, pinned_head, require_contest_pin, run_distinguishing
 from tools.phase5_sandbox import execute_queued_g3
 
 execute_queued_g3 = execute_queued_g3.handler
@@ -20,6 +20,11 @@ class ExecuteQueuedG3Tests(unittest.TestCase):
             ctx = make_ctx(Path(tmp))
             with self.assertRaises(ToolError):
                 execute_queued_g3(ctx, ExecuteQueuedInput(execute=False))
+
+    def test_contest_pin_is_immunefi_freeze(self):
+        self.assertEqual(CONTEST_PIN, "a82d4fefb02768e5b3bddcc97dee371eee24fea8")
+        self.assertEqual(pinned_head(), CONTEST_PIN)
+        self.assertEqual(require_contest_pin(), CONTEST_PIN)
 
     def test_named_open_catalog_size(self):
         self.assertEqual(len(NAMED_OPEN_IDS), 38)
