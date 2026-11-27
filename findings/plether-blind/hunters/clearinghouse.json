@@ -1,0 +1,319 @@
+[
+  {
+    "id": "L-CH-001",
+    "title": "Degraded-mode latch freezes surplus free-settlement withdrawals for healthy open positions",
+    "file": "packages/perps/src/CfdEngineSettlementSidecar.sol",
+    "line": 274,
+    "hypothesis": "SECURITY.md degraded containment only promises to block further risk expansion and still permit protective transitions. Live checkWithdraw -> validateWithdraw reverts on any open position while degradedMode is set, even when post-withdraw equity would remain above init/FAD and all VPI/carry floors. A single profitable close/liquidation that leaves E < L latches the flag; every other trader with a live position then cannot withdraw surplus free CH cash until the owner recapitalizes and calls clearDegradedMode. Flattening remains possible, so this is a freeze-of-surplus rather than permanent seizure, but it is user harm from a legitimate peer close, not owner malice.",
+    "why_not_known_issue": "SECURITY.md known limitations do not list open-position withdrawal freeze under degradedMode. The invariant table describes degradedMode as a risk-expansion latch, not a CH free-cash freeze. Scan titles about HousePool.payOut skipping L+B and about E<L-then-latch do not cover this remaining withdrawal guard.",
+    "impact": "C",
+    "trigger": "A",
+    "gate1_divergence": "keep",
+    "gate1_reason": "Code path is live: CfdEngine.checkWithdraw (line 730) always delegates to sidecar.validateWithdraw; sidecar lines 274-276 revert CfdEngine__DegradedMode whenever pos.size != 0. Latch is permissionless via close/liq in CfdEngine._enterDegradedModeIfInsolvent (line 1351) comparing P-C to L with pendingPoolPayout=0. Clearance is owner-only (CfdEngine.clearDegradedMode, line 658) and requires E >= L again. Surplus free settlement is CH custody, not pool L-backing, so the extra freeze is not implied by E<L containment.",
+    "poc_spec": {
+      "setup": "Seed HousePool so E is only slightly above L. Two accounts: Whale with a large in-the-money close, Victim with a healthy overcollateralized position plus extra free settlement in MarginClearinghouse (not pledged).",
+      "actors": "Whale trader (or their keeper-executed close), Victim trader, protocol owner for recap.",
+      "steps": [
+        "Victim deposits surplus free settlement on top of init-margin pledge and leaves a position open.",
+        "Confirm Victim.withdraw of the surplus succeeds while degradedMode is false and health remains above init.",
+        "Execute Whale's profitable full close so HousePool.totalAssets() net of claims drops below max(long,short) maxProfit. Engine latches degradedMode.",
+        "Victim calls withdraw on the same surplus amount without closing.",
+        "Optionally Victim fully closes, then withdraws remaining free settlement."
+      ],
+      "assert": "Step 4 reverts CfdEngine__DegradedMode even though leftover pledge+claim still exceeds init/FAD. Step 5 (flatten first) succeeds. Funds are not stolen but surplus is frozen for as long as E < L.",
+      "foundry_hint": "packages/perps/test/perps/accounting or engine settlement tests that already latch degradedMode on a profitable close; extend with a second account's withdrawMargin."
+    }
+  },
+  {
+    "id": "L-CH-002",
+    "title": "Liquidation reachable-collateral diagnostic includes VPI reserve that cannot pay price loss or the liq charge",
+    "file": "packages/perps/src/libraries/CfdEnginePlanLib.sol",
+    "line": 1453,
+    "hypothesis": "planLiquidation sets settlementReachableAssets = pos.margin + traderClaim + vpiRebateReserve and copies it to liquidationReachableCollateralAssets / LiquidationAccountingLib.reachableCollateralAssets. Exact price health immediately below uses only pledge+claim. The keeper/protocol/LP charge is separately capped by the dedicated liquidation reserve. CfdEngineLens copies that field into preview.reachableCollateralAssets (CfdEngineLens.sol:628). A consumer treating the field as 'what liquidation can seize' overstates seizable assets by the VPI floor, which is only reachable for matching negative-VPI clawback. This is claim/cash/reserve confusion on an in-scope lens, not a live custody drain.",
+    "why_not_known_issue": "Known scan items cover inverted liq-price search and open-preview liq-price inversion, not this VPI-in-reachable-collateral mix. PlanTypes comments call the field diagnostic, but ICfdEngineTypes still describes it as settlement reachable by liquidation before the charge — a remaining ABI/docs mismatch at this pin.",
+    "impact": "C",
+    "trigger": "A",
+    "gate1_divergence": "keep",
+    "gate1_reason": "Confirmed at CfdEnginePlanLib.sol:1451-1462: comment says VPI is only for clawback and price health uses pledge+claim, yet settlementReachableAssets still adds snap.vpiRebateReserveAssets. Lens line 628 publishes it. Live applyLiquidationSettlementPlan seizes settlementSeizedAssets (price-loss pledge + LP fee) and charges from the liquidation reserve, not from VPI except consumeVpiRebateReserve for clawback. No extra tokens move, but preview/live field parity is broken.",
+    "poc_spec": {
+      "setup": "Account with a liquidatable position, nonzero dedicated vpiRebateReserveBalances backing negative lifetime VPI, plus a small liquidation reserve.",
+      "actors": "Keeper liquidator, liquidated trader, off-chain consumer of CfdEngineLens.previewLiquidation.",
+      "steps": [
+        "Seed negative vpiAccrued with matching vpiRebateReserveAssets > 0.",
+        "Drive the position to exact-price liquidatable on pledge+claim only.",
+        "Call CfdEngineLens.previewLiquidation and record reachableCollateralAssets, liquidationChargeAssets, keeper/protocol/LP split.",
+        "Execute live liquidatePosition at the same price and compare CH bucket deltas: pnlPledge, liquidationReserve, vpiRebateReserve, claims."
+      ],
+      "assert": "Preview.reachableCollateralAssets includes the VPI reserve. Live price-loss + charge do not debit that VPI reserve except the clawback path. Charge is capped by liquidation reserve, so preview overstates seizable collateral by ~vpiRebateReserveAssets.",
+      "foundry_hint": "packages/perps/test/perps/accounting/liquidation and CfdEngineLens preview tests; compare lens reachableCollateralAssets to CH vpiRebateReserveAssets before/after."
+    }
+  },
+  {
+    "id": "L-CH-003",
+    "title": "Sidecar execute* auth bypass via CH operator discovery",
+    "file": "packages/perps/src/CfdEngineSettlementSidecar.sol",
+    "line": 146,
+    "hypothesis": "An untrusted keeper or random caller could invoke executeOpen/executeClose/executeLiquidation or CH onlyOperator methods and mutate custody.",
+    "why_not_known_issue": "N/A — killed; not a remaining bug.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "executeOpen/Close/Liq use onlyEngine (line 146) requiring msg.sender == immutable ENGINE. buildRawSnapshot additionally allows ENGINE.planningReader(), which is onlyEngine on the host. CH onlyOperator (MarginClearinghouse.sol:226) fail-closes if engine==0 and otherwise requires msg.sender == engine or engine.settlementSidecar() via try/catch _isSettlementSidecar (line 1369) returning false on revert. No public path for keepers.",
+    "poc_spec": {
+      "setup": "Deployed engine/sidecar/CH with router bound.",
+      "actors": "Arbitrary EOA / keeper.",
+      "steps": [
+        "Call sidecar.executeClose/executeOpen/executeLiquidation as non-engine.",
+        "Call CH.consumeActionCharge / unlockCloseMargin / settleAssets as non-operator."
+      ],
+      "assert": "All revert Unauthorized / NotOperator. No balances change.",
+      "foundry_hint": "packages/perps/test/perps/auth or clearinghouse operator tests."
+    }
+  },
+  {
+    "id": "L-CH-004",
+    "title": "Reservation double-release: consumeActionCharge then terminal reservation release",
+    "file": "packages/perps/src/MarginClearinghouse.sol",
+    "line": 663,
+    "hypothesis": "Full close/liquidation FIFO-consumes committed-order margin, then router terminal cleanup releases the same reservation into free settlement, inflating CH credits without tokens.",
+    "why_not_known_issue": "SECURITY.md already documents same-account FIFO consumption of sibling committed margin on full close as anti-shielding. Remaining question was whether Consumed records can be released again.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "releaseOrderReservationForTerminalCleanup (line 663) returns 0 unless status==Active. _consumeReservation sets remaining to 0 and closes as Consumed (line 800). Subsequent release sees non-Active and no-ops. consumeActionCharge requires the planned committed split to match live FIFO (line 967) and reverts IncompleteReservationCoverage if FIFO cannot cover. No second unlock of the same atoms.",
+    "poc_spec": {
+      "setup": "Account with a live position plus a queued open that still has an Active committed-order reservation.",
+      "actors": "Same-account trader, keeper executing FIFO close then cleanup.",
+      "steps": [
+        "Full-close the position so action charges consume sibling committed margin.",
+        "Router calls releaseOrderReservationForTerminalCleanup on the consumed order id.",
+        "Compare settlementBalances vs token balance vs locked buckets."
+      ],
+      "assert": "Second release returns 0; no extra free settlement. Custody still equals credited balances.",
+      "foundry_hint": "packages/perps/test/perps/clearinghouse reservation / order cleanup tests."
+    }
+  },
+  {
+    "id": "L-CH-005",
+    "title": "Trader claims used as cash to fund carry, VPI, fees, frozen spread, or bounties",
+    "file": "packages/perps/src/libraries/CfdEnginePlanLib.sol",
+    "line": 1136,
+    "hypothesis": "Outstanding traderClaimBalanceAssets could be spent as pool cash for action charges or bounties, desynchronizing C from P and stealing LP/claimant funds.",
+    "why_not_known_issue": "Claim-vs-cash boundary is an explicit SECURITY.md invariant; remaining bug would need a live path that actually spends C as cash.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_planCloseCashSources spends spendable action reserve, free settlement, released VPI remainder, terminal liq-reserve surplus, released pledge, then committed-order margin. Claims are only netted against price loss (pricePnlClaimConsumedAssets) and counted as health collateral in _limitCloseReleaseByHealth (comment at 1136). CashPriorityLib.reserveFreshPayouts treats C as senior to fresh payouts. consumeActionCharge never reads claim storage. Open costs debit CH free/pledge, not claims.",
+    "poc_spec": {
+      "setup": "Trader with large claim, tiny free settlement, frozen close that assesses spread+fee+carry.",
+      "actors": "Claimant trader, keeper.",
+      "steps": [
+        "Leave claim outstanding (payOut skipped because P < C or payout recorded as claim).",
+        "Execute close/open/liq whose action charges exceed free+reserve+pledge surplus.",
+        "Observe CH claim storage vs pool.totalAssets() vs actionChargeCollectedAssets."
+      ],
+      "assert": "Claim balance is unchanged except explicit price-loss netting. Action charges waive or fail rather than debit claims. P and C move together on settleTraderClaim.",
+      "foundry_hint": "packages/perps/test/perps/accounting/claims and EngineExecutionParity."
+    }
+  },
+  {
+    "id": "L-CH-006",
+    "title": "Frozen-close spread routed to protocol treasury via fee top-up",
+    "file": "packages/perps/src/CfdEngineSettlementSidecar.sol",
+    "line": 724,
+    "hypothesis": "On an oracle-frozen close, recovered cash is attributed as LP frozen spread, then _settleProtocolFeeTopUp (line 905) pays the same newly arrived pool cash to protocolTreasury, violating LP-owned spread vs protocol-owned fee.",
+    "why_not_known_issue": "ACCOUNTING_SPEC and EngineExecutionParity require treasury to receive fee not spread. A remaining bug would need recovered spread to be pulled as fee after fee-first allocation.",
+    "impact": "F-",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_planCloseActionSettlement fee-first caps delta.executionFeeAssets by eligible withheld+collected, then credits protocol fee from that slice only. _recoveredFrozenSpreadAssets subtracts assessed fee + unpaid carry + positive VPI before attributing remainder as spread. Live _settleProtocolFeeTopUp is capped by planned protocolFeeTopUpAssets, which _freePoolCashForProtocolFee computes after collections and, when poolQueuesTradingRevenue, after reserving arrived+retained revenue. Tests in EngineProtocolFees.t.sol assert top-up stops at the protected buffer. No extra spread atoms are credited to treasury.",
+    "poc_spec": {
+      "setup": "Oracle-frozen close with large frozenCloseSpreadBps, small executionFeeBps, trader paying from free settlement, pool with LP capital so queuesTradingRevenue is false.",
+      "actors": "Trader closing, treasury account, LP.",
+      "steps": [
+        "Snapshot treasury CH balance, pool accounted assets, and assessed frozenSpreadAssets.",
+        "Execute the frozen close.",
+        "Diff treasury credit vs FrozenCloseSpreadSettled recovered vs pool inflow."
+      ],
+      "assert": "Treasury delta equals allocated execution fee (collected + top-up), not recovered spread. Recovered spread remains in pool accounted assets / AlreadyRetained revenue.",
+      "foundry_hint": "packages/perps/test/perps/accounting/fees/EngineProtocolFees.t.sol and EngineExecutionParity.t.sol."
+    }
+  },
+  {
+    "id": "L-CH-007",
+    "title": "deposit() credits requested amount without receipt check (FOT / unsolicited USDG)",
+    "file": "packages/perps/src/MarginClearinghouse.sol",
+    "line": 348,
+    "hypothesis": "deposit()/_deposit credits `amount` after safeTransferFrom without measuring received tokens, unlike depositFor which requires received==amount. A fee-on-transfer token would mint extra free settlement. Direct USDG transfers are unrecoverable.",
+    "why_not_known_issue": "This is the known scan finding (deposit vs depositFor receipt) plus SECURITY.md Settlement-USDG recovery limitation. No new root cause at this pin: settlement is USDG, depositFor already has the exact-receipt check, and unsolicited USDG is documented as unrecoverable.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Known issue. Live USDG path has no FOT. depositFor (line 371) already enforces received==amount. Unsolicited USDG cannot be withdrawn because withdraw is settlementBalances-based. Owner rescueToken excludes settlement asset.",
+    "poc_spec": {
+      "setup": "Not applicable at this pin for USDG; would require a non-USDG FOT settlement asset which is OOS.",
+      "actors": "Depositor.",
+      "steps": [
+        "Call deposit(amount) with a token that transfers amount-fee.",
+        "Compare CH.balanceOf(this) increase vs settlementBalances[account] increase."
+      ],
+      "assert": "Under USDG they match. Under FOT they would diverge — already recorded in audits/.",
+      "foundry_hint": "packages/perps/test/perps/clearinghouse deposit tests."
+    }
+  },
+  {
+    "id": "L-CH-008",
+    "title": "Withdraw of locked buckets / remaining < totalLocked",
+    "file": "packages/perps/src/MarginClearinghouse.sol",
+    "line": 467,
+    "hypothesis": "A trader could withdraw through checkWithdraw and drain PnL pledge, liquidation reserve, committed-order margin, or VPI/bounty action reserve.",
+    "why_not_known_issue": "N/A — killed.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_withdraw provisionally debits settlementBalances then calls engine.checkWithdraw then requires remainingEquity >= totalLockedMargin and settlementBalances >= totalLockedMargin (lines 467-474). Locked buckets are not reduced by withdraw. Sidecar _requireWithdrawPositionHealthy additionally blocks if leftover pledge+claim is liquidatable at the stricter of init vs maint/FAD, if uncovered carry remains, or if VPI floor is underfunded.",
+    "poc_spec": {
+      "setup": "Position with pledge, liq reserve, committed order, and VPI rebate reserve.",
+      "actors": "Account owner.",
+      "steps": [
+        "Attempt withdrawMargin of (free + 1).",
+        "Attempt withdraw of an amount that would leave settlementBalances < totalLocked."
+      ],
+      "assert": "Both revert InsufficientFreeEquity / InsufficientAssetsForSettlement / WithdrawBlockedByOpenPosition. Locked buckets unchanged.",
+      "foundry_hint": "packages/perps/test/perps/clearinghouse withdraw tests."
+    }
+  },
+  {
+    "id": "L-CH-009",
+    "title": "Opens can leave E < L without degradedMode",
+    "file": "packages/perps/src/CfdEngineSettlementSidecar.sol",
+    "line": 524,
+    "hypothesis": "processOrder open path does not call _enterDegradedModeIfInsolvent; a crafted open could expand L past E and leave the protocol insolvent with degradedMode still false.",
+    "why_not_known_issue": "SECURITY.md requires E >= L+B on opens. Remaining bug would need executeOpen to skip that assert or compute a too-small requiredEffectiveAssets.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "planOpen rejects degradedMode and writes requiredEffectiveAssetsAfterAssets = post L + ceil(L * bufferBps / 10000) via SolvencyAccountingLib.hasRequiredSettlementBuffer. executeOpen ends with _assertRequiredEffectiveAssets against live pool.totalAssets() net of claims (line 524). Failure reverts PostOpSolvencyBreach, so the open cannot commit. Close/liq that do leave E < L latch degradedMode in _applyClose/_applyLiquidation (pendingPoolPayout=0 after sidecar payouts already applied). HousePool.payOut skipping L+B on those paths is the documented close-then-latch design.",
+    "poc_spec": {
+      "setup": "Pool with E just above L+B. Open that would push L above E.",
+      "actors": "Trader opening, keeper.",
+      "steps": [
+        "Submit an increase whose side maxProfit increase makes post L+B > live E.",
+        "Observe processOrderTyped result and degradedMode."
+      ],
+      "assert": "Typed SOLVENCY_EXCEEDED or PostOpSolvencyBreach revert. No position write. degradedMode remains false. E and L unchanged.",
+      "foundry_hint": "packages/perps/test/perps/accounting/solvency open-buffer tests."
+    }
+  },
+  {
+    "id": "L-CH-010",
+    "title": "Keeper-injected poolDepth desyncs VPI/solvency from live HousePool cash",
+    "file": "packages/perps/src/CfdEngine.sol",
+    "line": 762,
+    "hypothesis": "Untrusted keepers pass poolDepthAssets into processOrderTyped/liquidatePosition. Sidecar sets snap.poolAssets = poolDepth (line 210) while snap.poolCashAssets = pool.totalAssets() (line 192). Inflated depth would shrink VPI/utilization and could pass E>=L+B against fake assets.",
+    "why_not_known_issue": "N/A if router is the only caller and always passes totalAssets().",
+    "impact": "F-",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "processOrderTyped/liquidatePosition are onlyRouter. OrderRouter supplies housePool.totalAssets() in the same transaction before planning. Sidecar then re-reads totalAssets() for cash. Keepers cannot call the engine. Trusted-router malice is OOS. Live open assert also re-reads pool.totalAssets(), so a hypothetical fake depth cannot commit an insolvent open.",
+    "poc_spec": {
+      "setup": "Router-bound engine.",
+      "actors": "Keeper (not router).",
+      "steps": [
+        "Call engine.processOrderTyped with poolDepthAssets = type(uint256).max.",
+        "Call engine.liquidatePosition with a fake depth."
+      ],
+      "assert": "Revert NotRouter. No state change.",
+      "foundry_hint": "packages/perps/test/perps/engine onlyRouter tests."
+    }
+  },
+  {
+    "id": "L-CH-011",
+    "title": "Carry/VPI rounding leaks more than the documented <1 atom",
+    "file": "packages/perps/src/libraries/CloseAccountingLib.sol",
+    "line": 112,
+    "hypothesis": "Index floor-div plus position conversion plus VPI WAD math lets a trader extract >1 USDG atom per close via rebate or unpaid carry.",
+    "why_not_known_issue": "SECURITY.md Rounding limitations already accept <1 atom discarded per carry conversion, no persisted remainder, and VPI lifetime clamp / partial-close linear approximation. Remaining bug needs extractable value above that.",
+    "impact": "F-",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "computeIndexedCarryAssets is floor division and checkpoints even at 0 — documented. CloseAccountingLib lines 112-118 clamp lifetime VPI so proportionalAccrual+vpiDelta cannot go negative, blocking the depth-sandwich rebate. Zero economic depth skips fresh VPI (line 107) but still recovers prior negative VPI. No path found that materializes extra whole atoms beyond those documented floors.",
+    "poc_spec": {
+      "setup": "Tiny borrowBase, many user-triggered zero-amount withdraw checkpoints, then a close at manipulated depth.",
+      "actors": "Trader, LP.",
+      "steps": [
+        "Open, checkpointCarryIndexes / withdraw(0) many times with sub-atom accrual.",
+        "Try open-at-high-depth / reduce-depth / close rebate sandwich.",
+        "Sum discarded carry vs closed VPI rebate."
+      ],
+      "assert": "Carry loss per checkpoint < 1e-6 USDG. Sandwich rebate is clamped to lifetime zero. No extra atom paid from pool.",
+      "foundry_hint": "packages/perps/test/perps/accounting/vpi and carry tests."
+    }
+  },
+  {
+    "id": "L-CH-012",
+    "title": "recoverExpiredBounty try/catch leaves Active reservation so later take/credit double-pays",
+    "file": "packages/perps/src/MarginClearinghouse.sol",
+    "line": 1549,
+    "hypothesis": "Failed expired-bounty recovery keeps the bounty Active; a later takeBountyReservation plus creditBounty pays it, while some other path already unlocked the reserve.",
+    "why_not_known_issue": "SECURITY.md documents quarantine of inconsistent bounty records. Remaining bug would need Active+already-unlocked reserve that take() still pays.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "recoverExpiredBounty is fail-closed: invariant mismatch quarantines (line 1573) and returns without decreasing the floor. takeBountyReservation only succeeds for Active and then zeros the record before the router transfers. transferReservedSettlement enforces remaining action reserve >= vpi + remaining bounties. creditBounty without a prior take hits that floor and reverts. No double-pay path.",
+    "poc_spec": {
+      "setup": "Expired open with Active order bounty; optionally force a ledger mismatch.",
+      "actors": "Keeper running expiry, bounty owner (router).",
+      "steps": [
+        "Call recoverExpiredBounty on a consistent record vs a quarantined record.",
+        "Attempt takeBountyReservation + creditBounty / absorbReservedExecutionBounty twice."
+      ],
+      "assert": "Consistent recover settles once. Quarantined records do not unlock. Second take returns 0 / non-Active. Floor still covers VPI.",
+      "foundry_hint": "packages/perps/test/perps/clearinghouse bounty recovery tests."
+    }
+  },
+  {
+    "id": "L-CH-013",
+    "title": "TerminalNavBookV2 nested-mutation / unauthenticated curve write desync",
+    "file": "packages/perps/src/CfdEngine.sol",
+    "line": 1290,
+    "hypothesis": "Inner settlementWritePosition / delete / bounty credit mutates the NAV book without the outer _begin/_endTerminalCurveMutation hash check, desyncing LP NAV from live lots/entry.",
+    "why_not_known_issue": "SECURITY.md nested-boundary rule: only the outer engine boundary authenticates/syncs.",
+    "impact": "F-",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_applyOpen/_applyClose/_applyLiquidation all begin the trader (and, for liq bounty, keeper) curve hash before sidecar mutation and end after. settlementWritePosition/Delete are onlySettlementSidecar. TerminalNavBookV2.onlyEngine (book line 124) accepts only the engine. Nested sidecar calls do not re-authenticate; the outer hash still covers the net lots/entry write. Keeper==account skips the second bracket (line 1331).",
+    "poc_spec": {
+      "setup": "Open, partial close, liquidation that pays a keeper who also has a live position.",
+      "actors": "Trader, keeper-with-position.",
+      "steps": [
+        "Execute each flow and read TerminalNavBookV2 hash vs engine position lots/entryCost.",
+        "Attempt a direct book write from a non-engine account."
+      ],
+      "assert": "Hashes match post-op. Direct book calls revert onlyEngine.",
+      "foundry_hint": "packages/perps/test/perps/nav or terminal curve tests."
+    }
+  },
+  {
+    "id": "L-CH-014",
+    "title": "Close solvency uses router poolAssets while cash routing uses poolCashAssets, hiding E < L",
+    "file": "packages/perps/src/libraries/CfdEnginePlanLib.sol",
+    "line": 1371,
+    "hypothesis": "_computeCloseSolvency builds SolvencyState from snap.poolAssets (execution: caller poolDepth) while payouts/top-up use snap.poolCashAssets (live totalAssets). A mismatch could preview solvency against fake depth while actually draining cash, leaving E < L with no latch if the latch also used the fake number.",
+    "why_not_known_issue": "Would be new if live latch used the planner's fake E. It does not.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Live latch (_enterDegradedModeIfInsolvent, CfdEngine.sol:1351) re-reads pool.totalAssets() after sidecar token movements and compares to live _maxLiability(); pendingPoolPayout is 0 because payouts already hit the pool. Router sets poolDepth=totalAssets() in the same tx, so planner and cash fields match on the only live path. Opens additionally assert live E >= L+B.",
+    "poc_spec": {
+      "setup": "Close that pays a large immediate profit from a thin pool.",
+      "actors": "Profitable closer, remaining counterparties.",
+      "steps": [
+        "Execute the close through the router.",
+        "Compare planner solvency.effectiveAssetsAfterAssets to live P-C and degradedMode."
+      ],
+      "assert": "If live E < L, degradedMode is true. Planner preview on the router path matches live totalAssets observation.",
+      "foundry_hint": "packages/perps/test/perps/accounting/solvency close-then-latch tests."
+    }
+  }
+]

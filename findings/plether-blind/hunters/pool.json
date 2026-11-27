@@ -1,0 +1,305 @@
+[
+  {
+    "id": "L-LP-001",
+    "title": "Junior redemption funded while eligible Senior demand remains",
+    "file": "packages/perps/src/HousePool.sol",
+    "line": 854,
+    "hypothesis": "_settleLpEpoch funds Junior redemptions while a matured Senior redeem head still has remainingShares, violating senior-first cash priority.",
+    "why_not_known_issue": "Priority order is an invariant (ACCOUNTING_SPEC §3 / invariant 3), not the documented refund-epoch or rounding limitations.",
+    "impact": "F+",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Senior phase always runs first. Junior _fundRedemptionPhase runs only when seniorPhase.backlog is false. Work-cap (16 epochs with leftover budget) and leftover-budget rounding breaks both return before Junior. getMaturedRedeemHead treats any queued unfunded remainder as backlog. Zero-payout Senior heads are refunded in-phase (MED-24/29 path) and only then is Junior allowed. Dormant Senior principal without a matured head is intentionally not reserved.",
+    "poc_spec": {
+      "setup": "Seeded live pool, constrained free cash below combined Senior+Junior redeem demand, both tranches requestRedeem into the same epoch.",
+      "actors": "Alice Senior LP, Bob Junior LP, keeper/router.",
+      "steps": [
+        "Request equal-epoch Senior and Junior redemptions.",
+        "Warp to epoch start, refresh mark, call settleLpEpoch.",
+        "Assert result.juniorFundedAssets==0 while result.seniorBacklog and Senior remainingShares>0.",
+        "Repeat with Senior work-cap of 16 nonempty heads and leftover budget."
+      ],
+      "assert": "Junior fundedAssets stays 0 whenever getMaturedRedeemHead(seniorVault, cutoff) returns remainingShares>0.",
+      "foundry_hint": "Mirror packages/perps/test/perps/spec/lp/AsyncLpEpochSettlement.t.sol test_SettlementFundsSeniorBeforeJunior and test_LaterSeniorRequestPreemptsOlderJuniorBacklog; do not implement a new executable exploit."
+    }
+  },
+  {
+    "id": "L-LP-002",
+    "title": "Funded redemption claim reusable after fundingClaimed or mixed withdraw/redeem",
+    "file": "packages/perps/src/TrancheVault.sol",
+    "line": 1229,
+    "hypothesis": "A controller can claim the same funded-share/asset entitlement twice via claimRedeem, withdraw, and claimRedeemRefund, or by topping up a closed position on the same epoch.",
+    "why_not_known_issue": "Double-claim would violate invariant 4 (each funded claim claimed at most once), distinct from documented floor-rounding dust and MED-24/29 refund epochs.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "claimableRedeemRequest/Assets are floor(position.shares * funded / epoch.shares) minus claimed. Last partial claim pays remainingAssets. Mixed ceil-withdraw then remaining-assets-with-zero-shares still sums to entitledAssets, not more. fundingClaimed is set only when fundedShares==shares or refundEnabled, and fundRedeemEpoch then rejects further fills. Request window never targets the current (funding) epoch, so a closed position cannot be topped up on the same requestId. Refund + funded entitlements are separate floors whose sum is <= position.shares.",
+    "poc_spec": {
+      "setup": "Two-controller redeem epoch, partial then full funding, optional remainder refund.",
+      "actors": "Alice (large position), Bob (1-share dust position), attacker with operator/allowance.",
+      "steps": [
+        "Fully fund epoch; Alice partial redeem then withdraw remainder; attempt second claimRedeem.",
+        "Bob claimRedeem of 1 share for 0 assets then attempt claimRedeemRefund or a second redeem.",
+        "Partial-fund, refund remainder, claim both legs, attempt replay.",
+        "After terminal close, requestRedeem again in a later epoch and show it is a new requestId."
+      ],
+      "assert": "Sum of claimedAssets across all paths equals entitledAssets; second claim reverts; new requests use a future epoch id.",
+      "foundry_hint": "Start from AsyncTrancheVaultAllocation.t.sol test_RedeemAllocationReturnsAggregateAssetDustToPool and test_RefundAllocationSweepsShareDustAndSupportsZeroEntitlements."
+    }
+  },
+  {
+    "id": "L-LP-003",
+    "title": "Redemption funding or payOut uses accountedAssets or rawAssets instead of min(raw, accounted)",
+    "file": "packages/perps/src/HousePool.sol",
+    "line": 426,
+    "hypothesis": "A path spends or prices against accountedAssets (or raw) without the totalAssets() min, so phantom accounted (CashArrived without cash) or unaccounted raw can be withdrawn.",
+    "why_not_known_issue": "Bypassing the documented conservative physical-asset definition would be a new root cause, not the rounding/LP-accounting limitations.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "totalAssets() is min(raw, accounted). CfdEngineProtocolLens.getHousePoolInputSnapshot sets physicalAssets from that. _settleLpEpoch budgets from buildWithdrawalSnapshot(physicalAssets). payOut subtracts accounted then safeTransfers and reverts if raw is short. recordClaimantInflow CashArrived can raise accounted above raw, but NAV and free cash still cap at raw. Excess raw (raw>accounted) is unsweepable into NAV until owner accountExcess.",
+    "poc_spec": {
+      "setup": "Live pool with known accounted and raw. Engine-capable caller for recordClaimantInflow/payOut.",
+      "actors": "Owner, engine/sidecar, LP redeemer, keeper.",
+      "steps": [
+        "CashArrived amount without transferring tokens; observe accounted>raw; settle a Senior redeem; fundedAssets must be <= raw free cash.",
+        "Donate raw tokens without accountExcess; settle; funding must ignore the donation.",
+        "payOut(accounted) when raw<accounted must revert; payOut(raw) leaves phantom accounted but totalAssets()==0 so later funding is 0."
+      ],
+      "assert": "No settlement transfer exceeds min(raw, accounted) after reservations; donated raw cannot increase freeAssets until accountExcess.",
+      "foundry_hint": "Compare pool.totalAssets(), pool.rawAssets(), pool.accountedAssets() around settleLpEpoch; EngineAccountingViews.t.sol already asserts donations are ignored."
+    }
+  },
+  {
+    "id": "L-LP-004",
+    "title": "Share-escrow counters desync from vault ERC-20 balance",
+    "file": "packages/perps/src/TrancheVault.sol",
+    "line": 650,
+    "hypothesis": "requestRedeemFromClaimableDeposit, fee checkpoint-on-burn, or deposit-share dust burn can make balanceOf(vault) != depositClaimEscrowShares + pendingRedeemEscrowShares, enabling extra burns or stranded/stealable shares.",
+    "why_not_known_issue": "SECURITY.md states this equality as an invariant after routed-share reclassification; a break would be a new conservation bug, not Junior fee dust rounding.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Direct route decrements depositClaimEscrowShares and increments pendingRedeemEscrowShares with no token transfer. Terminal dust burn happens only when epoch.claimedAssets==epoch.assets and burns leftover minted shares still counted in depositClaimEscrow. Junior _burn/_mint checkpoints fee shares to a validated non-vault recipient before the burn. HousePool supply checks compare accruedTotalSupply() before vs totalSupply() after so pending fees compose. Tests assert custody==pendingRedeem after the terminal direct route.",
+    "poc_spec": {
+      "setup": "Two-controller deposit epoch with 1-share dust, Junior maintenance fee accrued one hour, one controller claims to wallet, the other requestRedeemFromClaimableDeposit of remaining entitlement.",
+      "actors": "Alice, Bob, fee recipient.",
+      "steps": [
+        "Finalize deposit with epoch.shares = assets-1 so sum of floors leaves 1 dust.",
+        "Accrue fee; Alice claimDeposit; Bob direct-route remaining shares.",
+        "Read balanceOf(vault), depositClaimEscrowShares, pendingRedeemEscrowShares.",
+        "Repeat around fundRedeemEpoch to compose fee mint with redeem burn."
+      ],
+      "assert": "After every protocol share movement, balanceOf(vault)==depositClaimEscrowShares+pendingRedeemEscrowShares; totalSupply changes by minted fees minus burned dust/funded shares only.",
+      "foundry_hint": "ClaimableDepositRedeem.t.sol test_TerminalDirectRouteComposesShareDustBurnWithMaintenanceFeeCheckpoint."
+    }
+  },
+  {
+    "id": "L-LP-005",
+    "title": "Share delivery to receiver!=controller steals shares or mixes cooldowns",
+    "file": "packages/perps/src/TrancheVault.sol",
+    "line": 1620,
+    "hypothesis": "An operator or allowance spender can claim deposit shares, cancel-redeem shares, or refund shares to a receiver other than the controller, taking inventory or resetting another wallet's cooldown.",
+    "why_not_known_issue": "SECURITY.md LP claim rules already require receiver==controller for share claims; a missing check would be an incomplete enforcement of that rule, not a known limitation.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_requireShareReceiver is on _claimDeposit, _claimMint, cancelRedeemRequest, and claimRedeemRefund. ERC-4626 deposit/mint wrappers pass msg.sender as controller so receiver must be the caller. Funded USDG claimRedeem/withdraw and pending-deposit USDG cancel intentionally allow a distinct receiver (documented). Operator is per-controller opt-in. Dust refunds go to seedReceiver, not the caller.",
+    "poc_spec": {
+      "setup": "Finalized deposit and a cancellable redeem request. Attacker is not operator.",
+      "actors": "Alice controller, attacker helper, third-party receiver.",
+      "steps": [
+        "attacker claimDeposit(..., alice, attacker) and claimDeposit(..., attacker, attacker) to alice.",
+        "attacker claimRedeemRefund / cancelRedeemRequest to a foreign receiver.",
+        "Approved operator claims shares only to controller; claims USDG to operator (allowed)."
+      ],
+      "assert": "All share-delivery paths revert TrancheVault__ReceiverNotController unless receiver==controller; Alice lastDepositTime unchanged by failed attempts.",
+      "foundry_hint": "DepositCooldownBehavior.t.sol third-party claim tests; AsyncTrancheVaultAllocation refund receiver test."
+    }
+  },
+  {
+    "id": "L-LP-006",
+    "title": "Deposit cooldown shortened below activation-max or inherited-max rules",
+    "file": "packages/perps/src/TrancheVault.sol",
+    "line": 325,
+    "hypothesis": "A user can make lastDepositTime older (or zero) after receiving newer shares, or claim shares to a fresh wallet to escape a newer wallet cooldown in a way the spec forbids.",
+    "why_not_known_issue": "SECURITY.md already allows independently aged claimable-deposit lots and forbids weakening a newer receiver cooldown; a path that assigns lastDepositTime without max() on a live wallet mix would be an incomplete cooldown fix.",
+    "impact": "F-",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Wallet transfers take max(to, from) and revert during sender cooldown; vault-sourced claims use max(receiver, activationTime); cancel/refund/bootstrap assign block.timestamp (lengthens). Direct requestRedeemFromClaimableDeposit never mixes into the wallet (documented). Fee mints skip lastDepositTime (recipient is governed). Seed dust sweep explicitly does not reset seed cooldown. No path writes a timestamp in the past over a newer one.",
+    "poc_spec": {
+      "setup": "Alice with activation T0, later deposit lot activating at T0+30m, plus an aged claimable-deposit lot.",
+      "actors": "Alice, Bob (fresh wallet), helper.",
+      "steps": [
+        "Claim newer lot then older lot; lastDepositTime must stay T0+30m.",
+        "After cooldown, transfer to Bob; Bob inherits Alice timestamp, does not get 0.",
+        "Helper cannot claimDeposit to Alice to bump/reset her clock.",
+        "Direct-route the aged lot while wallet is in cooldown; wallet lastDepositTime unchanged; cancel of that route sets lastDepositTime=now (lengthen)."
+      ],
+      "assert": "No sequence reduces lastDepositTime; combining lots never takes the older stamp; helper dust/top-up claims revert.",
+      "foundry_hint": "DepositCooldownBehavior.t.sol TransferredShareCooldownTest and ThirdPartyActivationCooldownTest."
+    }
+  },
+  {
+    "id": "L-LP-007",
+    "title": "LP epoch settlement hold can still fund or finalize epochs",
+    "file": "packages/perps/src/HousePool.sol",
+    "line": 797,
+    "hypothesis": "While lpEpochSettlementPaused, a keeper can still fundRedeemEpoch / finalizeDepositEpochFromPool / refundRedeemEpochRemainder via settleLpEpoch, reconcile, or a vault hook.",
+    "why_not_known_issue": "Hold semantics are a distinct emergency gate, not the Cecuro refund-epoch findings.",
+    "impact": "C",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "settleLpEpoch reverts immediately if lpEpochSettlementPaused. fundRedeemEpoch, finalizeDepositEpochFromPool, and refundRedeemEpochRemainder are onlyPool. reconcile() onlyVault does not fund queues. Views (getMaxSeniorWithdraw, isWithdrawalLive, canSettleDepositEntries, senior request admission) also go false. Junior request admission remains open by design; matured Junior deposits cannot cancel and simply wait. Already-funded claims remain callable (documented).",
+    "poc_spec": {
+      "setup": "Matured Senior and Junior redeem heads and a Junior deposit head. Call pauseLpEpochSettlement as pauser/coordinator.",
+      "actors": "Guardian/pauser, keeper/router, Alice LP.",
+      "steps": [
+        "pauseLpEpochSettlement; settleLpEpoch must revert HousePool__LpEpochSettlementPaused.",
+        "Direct vault.fundRedeemEpoch from keeper must revert NotPool.",
+        "Junior requestDeposit still succeeds; Senior requestDeposit reverts.",
+        "claimRedeem of a pre-hold funded epoch still pays; new funding does not."
+      ],
+      "assert": "No epoch escrow counters or principals change during the hold except user-side cancellations of still-cancellable Senior deposits.",
+      "foundry_hint": "AtomicLpEpochSettlement.t.sol hold/cancel tests; TimelockPause.t.sol settlement-hold trading liveness tests."
+    }
+  },
+  {
+    "id": "L-LP-008",
+    "title": "Marked receivable treated as spendable cash for redemption funding",
+    "file": "packages/perps/src/libraries/HousePoolAccountingLib.sol",
+    "line": 60,
+    "hypothesis": "buildReconcileSnapshot adds a positive terminalLpPriceDeltaAssets into distributable NAV, and that inflated figure is then used as freeAssets / redemption budget so LPs extract uncleared clearinghouse receivables.",
+    "why_not_known_issue": "SECURITY.md already says share NAV can exceed redeemable cash; using the receivable as the cash budget would be an incomplete separation of the two views.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Reconcile snapshot (physical + signed delta - claims) prices principals only. Withdrawal snapshot uses physicalAssets=totalAssets() without the delta, then reserves maxLiability + claims + buffer + unassigned + pending claimants. seniorPhase.budget=min(freeAssets, seniorPrincipal) so a receivable-inflated principal cannot increase cash paid. Same-call deposit escrow is transferred only after funding and is excluded from the frozen freeAssets local. ProtocolLens getHousePoolInputSnapshot copies pool.totalAssets() into physicalAssets and the delta into a separate field. Matches ACCOUNTING_SPEC example ( +80 NAV, 298.50 cash cap).",
+    "poc_spec": {
+      "setup": "Open positions with collectible positive terminalLpPriceDeltaAssets, pool cash 1000, claims 100, maxLiability 600, buffer 25bps, as in ACCOUNTING_SPEC.",
+      "actors": "Trader with losing position, Senior LP redeemer, keeper.",
+      "steps": [
+        "Read lens snapshot: physicalAssets==totalAssets(), terminalLpPriceDeltaAssets==+80.",
+        "getPendingTrancheState principals reflect ~980 NAV path; getFreeAssets / settlement budget remain ~298.50 before extra reservations.",
+        "settleLpEpoch a Senior redeem larger than free cash; fundedAssets <= free cash, not NAV."
+      ],
+      "assert": "fundedAssets <= P - C - L - B - unassigned - pending; fundedAssets does not increase when only terminalLpPriceDeltaAssets increases.",
+      "foundry_hint": "SourceBoundBountyLpPricing.t.sol and AsyncLpEpochSettlement same-call deposit exclusion tests; do not add a live close to manufacture cash inside the same settle."
+    }
+  },
+  {
+    "id": "L-LP-009",
+    "title": "Junior withdrawal or same-tx Senior deposit activation breaks maxSeniorShareBps covenant",
+    "file": "packages/perps/src/libraries/HousePoolSeniorCapacityLib.sol",
+    "line": 62,
+    "hypothesis": "Junior funding or grandfathered Senior deposit finalization after Junior redemptions can leave protectedSenior(+reservations)/junior above maxSeniorShareBps.",
+    "why_not_known_issue": "A same-transaction break of the live covenant would be new; SECURITY.md only grandfathers later governance cap cuts and accounting drift, not a broken funding cap.",
+    "impact": "F+",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Junior budget is min(free, juniorPrincipal, juniorWithdrawalRatioCap). The cap ceils required junior backing of protectedExposure+reservedSeniorDepositAssets. Settlement order is Senior redeem, Junior redeem, Junior deposit, Senior deposit, so reserved Senior is still reserved while Junior exits. scaleSeniorOnWithdraw floors HWM reduction (tighter remaining protection). Governance lowering maxSeniorShareBps after admission is the documented grandfathering limitation, not this path.",
+    "poc_spec": {
+      "setup": "50% maxSeniorShareBps, Senior principal+HWM, pending reserved Senior deposit, Junior redeem demand that would breach 50% if uncapped.",
+      "actors": "Senior depositor (reserved), Junior redeemer, keeper.",
+      "steps": [
+        "Reserve a Senior deposit that is tight against the 50% cap.",
+        "Queue a large Junior redeem; settle.",
+        "Measure protectedExposure+reserved vs juniorPrincipal before Senior finalize, then after Senior deposit activation."
+      ],
+      "assert": "After Junior funding and after Senior finalize in the same pass, commitmentsWithinLimits still holds at the current maxSeniorShareBps.",
+      "foundry_hint": "SeniorCapacity.t.sol covenant tests; AsyncLpEpochSettlement.t.sol 50% covenant assertion after settlement."
+    }
+  },
+  {
+    "id": "L-LP-010",
+    "title": "Unassigned / ownerless assets accrue to existing LP NAV without minting",
+    "file": "packages/perps/src/libraries/HousePoolReconcilePlanLib.sol",
+    "line": 113,
+    "hypothesis": "Revenue or recap with juniorSupply==0 (or unassigned cap-down) credits juniorPrincipal so current LPs capture ownerless value instead of unassignedAssets.",
+    "why_not_known_issue": "SECURITY.md requires ownerless value to stay in unassignedAssets until assignUnassignedAssets; leakage into juniorPrincipal would be an incomplete quarantine, not terminal dust rules.",
+    "impact": "F+",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "distributeRevenue always adds leftover to juniorPrincipal, but _reconcile/_previewPendingAccountingState then call juniorRevenueWithoutOwners and move that delta to unassigned when juniorSupply was zero. Recap remainder never goes to junior. Unassigned is subtracted before waterfall revenue/loss and deposits are gated while unassigned or residual pending buckets are nonzero. accountExcess is owner-only. Funded-asset dust returning as excess without restoring accountedAssets is documented.",
+    "poc_spec": {
+      "setup": "Wipe or zero Junior supply while Senior owners exist; inject CashArrived revenue or recap; alternatively leave unassignedAssets>0 and attempt ordinary Junior deposit.",
+      "actors": "Owner, engine, existing Senior/Junior LPs.",
+      "steps": [
+        "planReconcile with juniorSupply==0 and positive revenue; assert storage unassignedAssets increases and juniorPrincipal does not keep the revenue.",
+        "While unassignedAssets>0, canAcceptTrancheDeposits is false and settle defers entries.",
+        "assignUnassignedAssets mints matching bootstrap shares rather than silently thickening NAV."
+      ],
+      "assert": "After mark-fresh reconcile, ownerless surplus sits in unassignedAssets; LP principals increase only with share mint or intended waterfall owners.",
+      "foundry_hint": "HousePoolSnapshotParity.t.sol 'surplus without junior owners stays unassigned'; HousePoolBootstrap.t.sol quarantine tests."
+    }
+  },
+  {
+    "id": "L-LP-011",
+    "title": "EmergencyPauseCoordinator can unpause or move funds",
+    "file": "packages/perps/src/EmergencyPauseCoordinator.sol",
+    "line": 123,
+    "hypothesis": "Guardian triggerEmergencyPause / triggerFullContainment / triggerLpEpochSettlementHold can unpause a component, toggle pause off, or transfer settlement token / call HousePool payOut.",
+    "why_not_known_issue": "Coordinator least-authority is a separate trust-boundary claim; a hidden unpause or token move would be a new privilege-escalation root cause.",
+    "impact": "C",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Contract has no fallback/receive, no ERC-20 calls, no unpause()/unpauseLpEpochSettlement() invocations. It only calls ROUTER_ADMIN.pause() and HOUSE_POOL.pause()/pauseLpEpochSettlement(), skipping bits already set in _restrictionMask. IHousePoolEmergencyAdmin exposes unpause selectors but the coordinator never uses them; comments and Ownable recovery on each target match. Duplicate-target and code-size checks are constructor-only.",
+    "poc_spec": {
+      "setup": "Deployed coordinator with guardian, RouterAdmin, HousePool; optional already-paused subset.",
+      "actors": "Guardian, owner, random caller.",
+      "steps": [
+        "Call all three trigger functions; inspect traces for unpause, payOut, sweepExcess, transfer, setPauser, setGuardian.",
+        "Repeat when some restriction bits are already set (idempotent skip).",
+        "Non-guardian and post-setGuardian(0) callers revert UnauthorizedGuardian.",
+        "Compare HousePool/Router balances and lpEpochSettlementPaused before/after."
+      ],
+      "assert": "Only additional pause bits flip true; no token movement; no paused bit becomes false; owner still required to unpause on the component.",
+      "foundry_hint": "Read EmergencyPauseCoordinator.sol in full (file is <230 lines); TimelockPause.t.sol coordinator/hold coverage."
+    }
+  },
+  {
+    "id": "L-LP-012",
+    "title": "Same-call Junior deposit activation while Senior redeem backlog exists (priority confusion)",
+    "file": "packages/perps/src/HousePool.sol",
+    "line": 878,
+    "hypothesis": "If Senior redemptions leave a liquidity backlog, the same settleLpEpoch still finalizes Junior deposits, which could be mistaken for Junior taking cash ahead of Senior or expanding the exit budget.",
+    "why_not_known_issue": "Would be a new funding-budget bug if deposit escrow cash were included in the frozen exit budget; ACCOUNTING_SPEC says same-tx deposits are not a funding source.",
+    "impact": "F+",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "When seniorPhase.backlog is true, Junior redemptions are skipped, but deposit phases still run unless pause/entry gates fail. That is intentional: Junior entry does not consume Senior's leftover cash. freeAssets is snapshotted before any deposit finalize; tests assert seniorFundedAssets <= preEntryFreeAssets and Junior deposit assets still activate after a Senior liquidity backlog. Not Junior redemption-before-Senior.",
+    "poc_spec": {
+      "setup": "Large matured Senior redeem, Junior deposit in the same epoch, free cash strictly below Senior demand.",
+      "actors": "Senior redeemer, Junior depositor, keeper.",
+      "steps": [
+        "Record getFreeAssets before settle.",
+        "settleLpEpoch; assert seniorBacklog, juniorFundedAssets==0, juniorDepositAssets==deposit, seniorFundedAssets<=preEntryFreeAssets."
+      ],
+      "assert": "Deposit escrow does not increase the exit fill; Junior redeem fill stays 0 while Senior head remains.",
+      "foundry_hint": "AsyncLpEpochSettlement.t.sol test_LiquidityOnlySeniorBacklogStillAllowsSameCallJuniorEntry and test_SameCallDepositsAreExcludedFromWithdrawalFunding."
+    }
+  },
+  {
+    "id": "L-LP-013",
+    "title": "ProtocolLens freeAssets omits unassigned/pending reservations (keeper-usable overstatement)",
+    "file": "packages/perps/src/CfdEngineProtocolLens.sol",
+    "line": 128,
+    "hypothesis": "getProtocolAccountingSnapshot.freeAssets = poolAssets - (maxLiability + claims + buffer) without unassignedAssets or pending claimant buckets, so a keeper treating it as spendable LP cash over-withdraws quarantined value.",
+    "why_not_known_issue": "If this view drove settlement it would be a new min(raw,accounted)/reservation bypass; HousePool settlement is supposed to add those reservations itself.",
+    "impact": "C",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "HousePool settlement and getFreeAssets/getSettlementFreeAssets call _buildWithdrawalSnapshot(..., unassignedAssets, pendingClaimantBuckets). The protocol-accounting snapshot is diagnostic (in-scope lens) and is not read by settleLpEpoch. Untrusted keepers cannot pass a custom budget into _fundRedemptionPhase.",
+    "poc_spec": {
+      "setup": "Nonzero unassignedAssets and/or pendingRecapitalizationAssets with otherwise identical P, C, L, B.",
+      "actors": "Owner (to create unassigned), keeper.",
+      "steps": [
+        "Compare engineProtocolLens.getProtocolAccountingSnapshot().freeAssets to pool.getFreeAssets().",
+        "Call settleLpEpoch and show fundedAssets tracks getFreeAssets, not the larger lens number."
+      ],
+      "assert": "Settlement budget follows HousePool freeAssets; lens overstatement cannot be passed in as fundedAssets.",
+      "foundry_hint": "Differential CfdEngineProtocolLens.t.sol / HousePoolSnapshotParity.t.sol; read-only comparison, no exploit script."
+    }
+  }
+]

@@ -1,0 +1,102 @@
+impact,confidence,check,file,line,oos,desc
+High,Medium,arbitrary-send-eth,packages/perps/src/PletherOracle.sol,1055,False,"PletherOracle._refundValue(address,uint256) (src/PletherOracle.sol#1055-1068) sends eth to arbitrary user
+	Dangerous calls:
+	- (ok,None) = refundRecipient.call{gas: ETH_REFUND_GAS,"
+High,Medium,weak-prng,packages/perps/src/PletherOracle.sol,805,False,"PletherOracle._computeBasketPriceFromFeeds(IPletherOracle.PriceMode,PythStructs.PriceFeed[],uint256) (src/PletherOracle.sol#805-876) uses a weak PRNG: ""epochStart = block.timestamp"
+High,Medium,reentrancy-eth,packages/perps/src/PletherOracle.sol,245,False,"Reentrancy in PletherOracle.updateBatchOrderExecutionPrice(address,bytes[],IPletherOracle.OrderExecutionRequest,IPletherOracle.BatchOrderPriceCache) (src/PletherOracle.sol#245-299)"
+High,Medium,reentrancy-eth,packages/perps/src/PletherOracle.sol,545,False,"Reentrancy in PletherOracle._updateOrderExecutionPrice(address,bytes[],IPletherOracle.OrderExecutionRequest) (src/PletherOracle.sol#545-563):
+	External calls:
+	- (basket,ok) = _res"
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLens.sol,136,True,"SettlementMonitorLens.HOUSE_POOL (src/SettlementMonitorLens.sol#136) is never initialized. It is used in:
+	- SettlementMonitorLens.getSettlementHealth() (src/SettlementMonitorLens."
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLensSidecar.sol,49,True,"SettlementMonitorLensSidecar.HOUSE_POOL (src/SettlementMonitorLensSidecar.sol#49) is never initialized. It is used in:
+	- SettlementMonitorLensSidecar._buildSettlementAccounting() "
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLensSidecar.sol,53,True,"SettlementMonitorLensSidecar.SENIOR_VAULT (src/SettlementMonitorLensSidecar.sol#53) is never initialized. It is used in:
+	- SettlementMonitorLensSidecar._populateCustodyHealth(Sett"
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLensSidecar.sol,52,True,"SettlementMonitorLensSidecar.TERMINAL_NAV_BOOK (src/SettlementMonitorLensSidecar.sol#52) is never initialized. It is used in:
+	- SettlementMonitorLensSidecar._populateNavHealth(Set"
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLens.sol,141,True,"SettlementMonitorLens.JUNIOR_VAULT (src/SettlementMonitorLens.sol#141) is never initialized. It is used in:
+	- SettlementMonitorLens._buildSettlementStatus(uint256) (src/Settlement"
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLensSidecar.sol,57,True,"SettlementMonitorLensSidecar._BOUND_PLANNER_CODEHASH (src/SettlementMonitorLensSidecar.sol#57) is never initialized. It is used in:
+	- SettlementMonitorLensSidecar._plannerBindingS"
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLensSidecar.sol,55,True,"SettlementMonitorLensSidecar.settlementToken (src/SettlementMonitorLensSidecar.sol#55) is never initialized. It is used in:
+	- SettlementMonitorLensSidecar._readBalance(address) (s"
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLens.sol,140,True,"SettlementMonitorLens.SENIOR_VAULT (src/SettlementMonitorLens.sol#140) is never initialized. It is used in:
+	- SettlementMonitorLens._buildSettlementStatus(uint256) (src/Settlement"
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLensSidecar.sol,56,True,"SettlementMonitorLensSidecar._BOUND_PLANNER (src/SettlementMonitorLensSidecar.sol#56) is never initialized. It is used in:
+	- SettlementMonitorLensSidecar._plannerBindingStatus() ("
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLens.sol,143,True,"SettlementMonitorLens.SIDECAR (src/SettlementMonitorLens.sol#143) is never initialized. It is used in:
+	- SettlementMonitorLens.getSettlementStatus(uint256) (src/SettlementMonitorL"
+High,High,uninitialized-state,packages/perps/src/SettlementMonitorLensSidecar.sol,54,True,"SettlementMonitorLensSidecar.JUNIOR_VAULT (src/SettlementMonitorLensSidecar.sol#54) is never initialized. It is used in:
+	- SettlementMonitorLensSidecar._populateCustodyHealth(Sett"
+Medium,High,incorrect-equality,packages/perps/src/PletherOracle.sol,397,False,"PletherOracle._claimEthRefund(address) (src/PletherOracle.sol#397-412) uses a dangerous strict equality:
+	- amount == 0 (src/PletherOracle.sol#404)
+"
+Medium,High,incorrect-equality,packages/perps/src/PletherOracle.sol,1039,False,"PletherOracle._refundExcess(address,uint256) (src/PletherOracle.sol#1039-1053) uses a dangerous strict equality:
+	- refund == 0 (src/PletherOracle.sol#1044)
+"
+Medium,High,incorrect-equality,packages/perps/src/CfdClosePreview.sol,167,True,"CfdClosePreview._validateRouterCommit(CfdEnginePlanTypes.RawSnapshot,CfdTypes.Order,address) (src/CfdClosePreview.sol#167-194) uses a dangerous strict equality:
+	- commitPrice == 0"
+Medium,High,incorrect-equality,packages/perps/src/PletherOracle.sol,925,False,"PletherOracle._orderExecutionPrice(IPletherOracle.OrderExecutionRequest,uint256,uint256,bool) (src/PletherOracle.sol#925-941) uses a dangerous strict equality:
+	- price == 0 (src/P"
+Medium,High,incorrect-equality,packages/perps/src/PletherOracle.sol,805,False,"PletherOracle._computeBasketPriceFromFeeds(IPletherOracle.PriceMode,PythStructs.PriceFeed[],uint256) (src/PletherOracle.sol#805-876) uses a dangerous strict equality:
+	- basket.pri"
+Medium,High,incorrect-equality,packages/perps/src/PletherOracle.sol,749,False,"PletherOracle._resolveCurrentBasket(bytes[],IPletherOracle.PriceMode,IPletherOracle.PolicySnapshot) (src/PletherOracle.sol#749-801) uses a dangerous strict equality:
+	- hasAccepted"
+Medium,High,incorrect-equality,packages/perps/src/PletherOracle.sol,905,False,"PletherOracle._adverseOrderPrice(IPletherOracle.OrderExecutionRequest,uint256,uint256) (src/PletherOracle.sol#905-923) uses a dangerous strict equality:
+	- shift == 0 (src/PletherO"
+Medium,High,incorrect-equality,packages/perps/src/PletherOracle.sol,943,False,"PletherOracle._adverseLiquidationPrice(address,uint256,uint256) (src/PletherOracle.sol#943-958) uses a dangerous strict equality:
+	- shift == 0 (src/PletherOracle.sol#949)
+"
+Medium,High,incorrect-equality,packages/perps/src/PletherOracle.sol,1021,False,"PletherOracle._normalizePythPrice(int64,int32) (src/PletherOracle.sol#1021-1037) uses a dangerous strict equality:
+	- expo == - 8 (src/PletherOracle.sol#1030)
+"
+Medium,High,incorrect-equality,packages/perps/src/PletherOracle.sol,878,False,"PletherOracle._snapshotFromBasket(PletherOracle.BasketPrice,IPletherOracle.PolicySnapshot,bool) (src/PletherOracle.sol#878-903) uses a dangerous strict equality:
+	- snapshot.publis"
+Medium,High,pyth-unchecked-confidence,packages/perps/src/PletherOracle.sol,645,False,"Pyth price conf field is not checked in PletherOracle._requireStoredFeedCoverage(bytes32,uint256) (src/PletherOracle.sol#645-653)
+	- storedPublishTime = pyth.getPriceUnsafe(feedId)"
+Medium,High,pyth-unchecked-publishtime,packages/perps/src/PletherOracle.sol,645,False,"Pyth price publishTime field is not checked in PletherOracle._requireStoredFeedCoverage(bytes32,uint256) (src/PletherOracle.sol#645-653)
+	- storedPublishTime = pyth.getPriceUnsafe("
+Medium,Medium,uninitialized-local,packages/perps/src/CfdOrderPolicyEvaluator.sol,98,False,"CfdOrderPolicyEvaluator.assessOrder(address,CfdTypes.Order,address,uint256,uint256,OrderV3Types.ExecutionBounds,uint256).context (src/CfdOrderPolicyEvaluator.sol#98) is a local var"
+Medium,Medium,uninitialized-local,packages/perps/src/TerminalNavBookV2.sol,512,False,"TerminalNavBookV2._replaceCurve(ITerminalNavBookV2.CurveRecord,ITerminalNavBookV2.CurveRecord).oldPrefix (src/TerminalNavBookV2.sol#512) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/OrderLifecycleBook.sol,704,False,"OrderLifecycleBook._validateBountyDisposition(OrderV3Types.OrderReceipt).forfeited (src/OrderLifecycleBook.sol#704) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/OrderLifecycleBook.sol,706,False,"OrderLifecycleBook._validateBountyDisposition(OrderV3Types.OrderReceipt).disposition (src/OrderLifecycleBook.sol#706) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/PletherOracle.sol,816,False,"PletherOracle._computeBasketPriceFromFeeds(IPletherOracle.PriceMode,PythStructs.PriceFeed[],uint256).maxPublishTime (src/PletherOracle.sol#816) is a local variable never initialize"
+Medium,Medium,uninitialized-local,packages/perps/src/OrderRecoverySidecar.sol,279,False,"OrderRecoverySidecar._validateSettledTerminalInput(IOrderRouterExecutionHost,OrderV3Types.PendingIntent,IOrderRouterExecutionHost.SettledTerminalInput).recipient (src/OrderRecovery"
+Medium,Medium,uninitialized-local,packages/perps/src/PletherOracle.sol,143,False,"PletherOracle.constructor(address,address,address,bytes32[],uint256[],uint256[],bool[]).totalWeight (src/PletherOracle.sol#143) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/SettlementMonitorLens.sol,1191,True,"SettlementMonitorLens._populateCommonDepositDeferrals(SettlementMonitorViewTypes.SettlementStatus,SettlementMonitorLens.StatusReadValidity).common (src/SettlementMonitorLens.sol#11"
+Medium,Medium,uninitialized-local,packages/perps/src/CfdEngineLens.sol,542,False,"CfdEngineLens._findLiquidationPrice(CfdTypes.Position,uint256,uint256,uint256,uint256).low (src/CfdEngineLens.sol#542) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/OrderLifecycleBook.sol,703,False,"OrderLifecycleBook._validateBountyDisposition(OrderV3Types.OrderReceipt).refunded (src/OrderLifecycleBook.sol#703) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/TerminalNavBookV2.sol,329,False,"TerminalNavBookV2._terminalLpPriceDeltaAssetAtoms(uint32).prefix (src/TerminalNavBookV2.sol#329) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/OrderRouterExecutionSidecar.sol,242,False,"OrderRouterExecutionSidecar.executeOrderBatch(uint64,bytes[]).state (src/OrderRouterExecutionSidecar.sol#242) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/CfdEngineLens.sol,563,False,"CfdEngineLens._findLiquidationPrice(CfdTypes.Position,uint256,uint256,uint256,uint256).lo (src/CfdEngineLens.sol#563) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/OrderRecoverySidecar.sol,278,False,"OrderRecoverySidecar._validateSettledTerminalInput(IOrderRouterExecutionHost,OrderV3Types.PendingIntent,IOrderRouterExecutionHost.SettledTerminalInput).disposition (src/OrderRecove"
+Medium,Medium,uninitialized-local,packages/perps/src/OrderRouterExecutionSidecar.sol,479,False,"OrderRouterExecutionSidecar._executePrepared(IOrderRouterExecutionHost,IOrderLifecycleBook,CfdTypes.Order,OrderV3Types.PendingIntent,IOrderRouterExecutionHost.ItemRequest,bytes32)."
+Medium,Medium,uninitialized-local,packages/perps/src/CfdEngineLens.sol,462,False,"CfdEngineLens._frozenSpreadPaidAssets(CfdEnginePlanTypes.CloseDelta).effectiveSpreadAssets (src/CfdEngineLens.sol#462) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/SettlementMonitorLens.sol,820,True,"SettlementMonitorLens._validateQueueEndpoints(SettlementMonitorViewTypes.TrancheQueueStatus,address,uint256,bool,bool,bool,bool).redeemValid (src/SettlementMonitorLens.sol#820) is "
+Medium,Medium,uninitialized-local,packages/perps/src/SettlementMonitorLens.sol,810,True,"SettlementMonitorLens._validateQueueEndpoints(SettlementMonitorViewTypes.TrancheQueueStatus,address,uint256,bool,bool,bool,bool).depositValid (src/SettlementMonitorLens.sol#810) is"
+Medium,Medium,uninitialized-local,packages/perps/src/TerminalNavBookV2.sol,537,False,"TerminalNavBookV2._applyEvent(uint32,ITerminalNavBookV2.Coeff,bool).prefix (src/TerminalNavBookV2.sol#537) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/OrderLifecycleBook.sol,702,False,"OrderLifecycleBook._validateBountyDisposition(OrderV3Types.OrderReceipt).paid (src/OrderLifecycleBook.sol#702) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/SettlementMonitorLens.sol,314,True,"SettlementMonitorLens._buildSettlementStatus(uint256).validity (src/SettlementMonitorLens.sol#314) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/PletherOracle.sol,261,False,"PletherOracle.updateBatchOrderExecutionPrice(address,bytes[],IPletherOracle.OrderExecutionRequest,IPletherOracle.BatchOrderPriceCache).reusedBasket (src/PletherOracle.sol#261) is a"
+Medium,Medium,uninitialized-local,packages/perps/src/SettlementMonitorLens.sol,488,True,"SettlementMonitorLens._buildTrancheQueueStatus(address,uint256,uint256,bool).failedReadMask (src/SettlementMonitorLens.sol#488) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/TerminalNavBookV2.sol,513,False,"TerminalNavBookV2._replaceCurve(ITerminalNavBookV2.CurveRecord,ITerminalNavBookV2.CurveRecord).nextPrefix (src/TerminalNavBookV2.sol#513) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/OrderLifecycleBook.sol,705,False,"OrderLifecycleBook._validateBountyDisposition(OrderV3Types.OrderReceipt).recipient (src/OrderLifecycleBook.sol#705) is a local variable never initialized
+"
+Medium,Medium,uninitialized-local,packages/perps/src/CfdEngineSettlementSidecar.sol,733,False,CfdEngineSettlementSidecar._recoveredFrozenSpreadAssets(CfdEnginePlanTypes.CloseDelta).effectiveSpreadAssets (src/CfdEngineSettlementSidecar.sol#733) is a local variable never init
+Medium,Medium,uninitialized-local,packages/perps/src/router/OrderLiquidationBatchLogic.sol,234,False,"OrderLiquidationBatchLogic._commitOrder(IOrderLiquidationBatchHost,address,OrderV3Types.OrderRequest,bool).executionBountyAssets (src/router/OrderLiquidationBatchLogic.sol#234) is "

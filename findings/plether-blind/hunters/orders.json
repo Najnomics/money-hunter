@@ -1,0 +1,344 @@
+[
+  {
+    "id": "L-OR-001",
+    "title": "FIFO skip of a still-valid head via executeOrder(laterId) or batch cursor",
+    "file": "packages/perps/src/OrderRouterExecutionSidecar.sol",
+    "line": 147,
+    "hypothesis": "A keeper can pass a later orderId than the live head and execute that later valid order, skipping an earlier executable order.",
+    "why_not_known_issue": "Would be a new FIFO-priority break, not the documented oracle-free cleanup of expired/config-invalid/risk-off ids.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "The single-order loop only terminally prunes pre-oracle heads (risk-off, expiry, config mismatch). A live Execute head breaks the loop; if that head is not the requested id the call reverts OrderNotQueueHead unless prior cleanup already made progress, in which case it returns without executing the later id. Batch always consumes host.nextExecuteId() and stops on Pending. clearInvalidOrders/expireOrder may unlink non-head ids only when expired or pinned-hash mismatch.",
+    "poc_spec": {
+      "setup": "Two pending live orders, earlier id still inside its execution window with matching config hash.",
+      "actors": "Trader A (head), trader B (later), untrusted keeper.",
+      "steps": ["Keeper calls executeOrder(B) or executeOrderBatch(B) while A is the live head."],
+      "assert": "B cannot fill while A remains Pending with a non-terminal reason.",
+      "foundry_hint": "Do not write a Foundry test; inspect executeOrder while-loop + OrderNotQueueHead."
+    }
+  },
+  {
+    "id": "L-OR-002",
+    "title": "Non-head expire/clearInvalidOrders skips a valid FIFO predecessor",
+    "file": "packages/perps/src/OrderRecoverySidecar.sol",
+    "line": 67,
+    "hypothesis": "Permissionless expireOrder/clearInvalidOrders can remove a still-valid order behind the head, letting a later order trade first.",
+    "why_not_known_issue": "Would be a new valid-order skip rather than documented oracle-free invalid cleanup.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "expireOrder reverts OrderNotExpired unless block.timestamp > executionDeadline. clearInvalidOrders continues only when expired or expectedConfigHash is nonzero and not equal to currentExecutionConfigHash; live matching-hash orders are skipped. Unlink of a middle invalid node does not advance nextExecuteId past a still-pending valid head.",
+    "poc_spec": {
+      "setup": "Head valid; later order still inside window with current config hash.",
+      "actors": "Two traders, any keeper.",
+      "steps": ["Call expireOrder(later) or clearInvalidOrders([later]) while later is live-valid."],
+      "assert": "Later id remains Pending; head is unchanged.",
+      "foundry_hint": "Read clearInvalidOrders expired/configInvalid predicates only."
+    }
+  },
+  {
+    "id": "L-OR-003",
+    "title": "Exact client-id replay creates a second reservation or re-opens a terminal intent",
+    "file": "packages/perps/src/router/OrderLiquidationBatchLogic.sol",
+    "line": 213,
+    "hypothesis": "commitOrder exact replay after expiry/execution still reserves margin/bounty or mints a new order id, breaking permanent idempotency.",
+    "why_not_known_issue": "New root cause versus the documented side-effect-free replay rule.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "resolveClientIntent runs before admission. ExactReplay returns the original id with no registerPending, no executeCommitOrderItem, and no bounty/margin lock. Conflict reverts. registerPending also returns replayed=true if the mapping already exists. commitOpenOrderWithProtection and cancelPositionProtectionAndCommitClose reject a returned id that is not nextCommitId, so composite paths cannot attach new protection or cancel-and-close via historical replay.",
+    "poc_spec": {
+      "setup": "Commit a V3 request; execute or expire it.",
+      "actors": "Same account.",
+      "steps": ["Replay the identical OrderRequest including timing and bounds."],
+      "assert": "Returned id is the original; pendingOrderCounts and bounty reservations do not increase.",
+      "foundry_hint": "See OrderSettlementFloor.t.sol comments on terminal replay; do not add tests."
+    }
+  },
+  {
+    "id": "L-OR-004",
+    "title": "Trader can cancel a committed queued intent",
+    "file": "packages/perps/src/PositionProtectionBook.sol",
+    "line": 331,
+    "hypothesis": "cancelPositionProtection, cancelPositionProtectionAndCommitClose, or another public path unlinks a still-pending ordinary order and refunds it as if it were never binding.",
+    "why_not_known_issue": "Would violate the documented no-user-cancel invariant with a new mutation path.",
+    "impact": "C",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "No trader cancel exists on OrderRouter for a live intent. cancelPositionProtection only cancels PendingOpen/Armed protection and refunds the trigger bounty; the parent open stays queued. cancelPositionProtectionAndCommitClose requires Armed, empty account queue, then commits a fresh close (replay id is rejected). Risk-off cleanup is admin-cutoff based; expiry/config-mismatch cleanup requires those terminal predicates. Governance treasury/hash drift that terminally invalidates pinned orders is the documented ConfigMismatch policy, not a user cancel.",
+    "poc_spec": {
+      "setup": "Pending ordinary open or close with matching current config hash, not expired, not under risk-off cutoff.",
+      "actors": "Submitting trader.",
+      "steps": ["Attempt every public Book/Router cancel/replace/composite entrypoint."],
+      "assert": "Order remains Pending with original reservations.",
+      "foundry_hint": "Trace onlyRouter/self-call gates on refundRiskOff and settleOrderFromSidecar."
+    }
+  },
+  {
+    "id": "L-OR-005",
+    "title": "Solidity panic or empty/OOG engine revert is decoded as terminal planner policy",
+    "file": "packages/perps/src/OrderRouterExecutionSidecar.sol",
+    "line": 827,
+    "hypothesis": "Panic(uint256), empty returndata, or unknown selectors are allow-listed as PlannerRejected/ConstraintViolation and unlink the order.",
+    "why_not_known_issue": "Would be a new classification bug versus the documented retryable-uncertainty rule.",
+    "impact": "C",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_classifyTypedFailure requires exact selector plus exact ABI lengths (100/68/100) and known open codes 1-11 or close codes 1-7 with matching CfdEnginePlanLib category not None. Panic is 36 bytes / 0x4e487b71 and stays non-terminal; _settleEngineFailure/_settleAssessmentFailure then _revertRetryable. Outer catch maps RetryableFailure/MalformedSuccess/AssessmentStateMismatch to Pending EngineFailure and unknown selectors to ReceiptFailure. Existing OrderSettlementFloor test mocks Panic(0x11) and asserts Pending.",
+    "poc_spec": {
+      "setup": "Pending head order.",
+      "actors": "Keeper; engine/evaluator mocked to panic or return empty revert.",
+      "steps": ["executeOrder the head."],
+      "assert": "LifecycleStatus.Pending; reservations intact; no OrderFinalized.",
+      "foundry_hint": "Do not add tests; classification is length-and-selector gated."
+    }
+  },
+  {
+    "id": "L-OR-006",
+    "title": "ProtocolStateInvalidated typed codes remain retryable and jam FIFO",
+    "file": "packages/perps/src/libraries/CfdEnginePlanLib.sol",
+    "line": 112,
+    "hypothesis": "DEGRADED_MODE/SKEW_TOO_HIGH/SOLVENCY_EXCEEDED/NUMERIC_DOMAIN_EXCEEDED are labeled ProtocolStateInvalidated but the sidecar treats only UserInvalid as terminal, leaving a retryable head.",
+    "why_not_known_issue": "Would be a new mismatch between planner categories and sidecar terminalization.",
+    "impact": "C",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Sidecar sets terminal=true for any matching non-None ExecutionFailurePolicyCategory, including ProtocolStateInvalidated. CloseOnly is the separate non-typed Pending path. Transient skew/solvency therefore burns the open and pays the reserved opening bounty, which SECURITY.md already states for typed planner rejections.",
+    "poc_spec": {
+      "setup": "Open that the planner rejects with SKEW_TOO_HIGH at execution.",
+      "actors": "Trader, keeper.",
+      "steps": ["Execute the head when skew is over the cap."],
+      "assert": "Order is Failed/PlannerRejected, not Pending; later ids can become head.",
+      "foundry_hint": "Compare getExecutionFailurePolicyCategory with _classifyTypedFailure knownCode branch."
+    }
+  },
+  {
+    "id": "L-OR-007",
+    "title": "Ordinary or protection close records a nonzero Order bounty",
+    "file": "packages/perps/src/router/OrderLiquidationBatchLogic.sol",
+    "line": 234,
+    "hypothesis": "Close commit or protection-attempt queue writes a nonzero BountyKind.Order amount (min-open floor, leftover open-bounty config, or trigger-item encoding), so a close failure/execution pays a keeper from trader funds.",
+    "why_not_known_issue": "Would be a new break of the zero ordinary/protection close-bounty invariant, not MED-22 carry rounding.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_commitOrder sets executionBountyAssets only in the open branch via _validatedOpenBounty; closes skip it and remain 0. _reserveExecutionBounty reverts CfdEngine__InvalidRiskParams if isClose && bounty!=0. Protection trigger/retry registerPending(..., 0), maxExecutionBountyAssets=0, and executePositionProtectionTriggerItem records 0. Failed protection attempts revert ProtectedCloseBountyNonzero if the Order record is nonzero. Book finalize checks receipt bounty against the authenticated zero entitlement.",
+    "poc_spec": {
+      "setup": "Ordinary full close and a triggered protection close with nonzero minOpenOrderExecutionBountyAssets config.",
+      "actors": "Trader, keeper.",
+      "steps": ["Commit/queue each close; inspect clearinghouse getBountyReservation(Order, id); execute success and failure."],
+      "assert": "amountAssets==0, takeBountyReservation returns 0, receipt disposition None.",
+      "foundry_hint": "Trace _commitOrder isClose branch and executePositionProtectionTriggerItem."
+    }
+  },
+  {
+    "id": "L-OR-008",
+    "title": "Protection trigger bounty paid to a party other than the triggering keeper, or paid twice",
+    "file": "packages/perps/src/router/OrderLiquidationBatchLogic.sol",
+    "line": 611,
+    "hypothesis": "Trailing calldata on updateMarkPrice can be forged so a non-triggering caller receives triggerBountyAssets, or retry/failure pays the trigger bounty again.",
+    "why_not_known_issue": "New theft of the once-only ProtectionTrigger reservation.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "isProtectionTrigger requires msg.sender==positionProtectionBook. Direct updateMarkPrice ignores trailing words. The Book concatenates abi.encode(msg.sender, protectionId) after the updateMarkPrice ABI so assembly always reads the Book-appended keeper. activate() requires Armed, matching position, empty queue, unfrozen, newer publish time, and a met TP/SL leg, then takeBountyReservation once. Retry is Latched-only, nonpayable, and never creditBounty. Failed attempts require zero Order bounty and only relatch.",
+    "poc_spec": {
+      "setup": "Armed protection with nonzero trigger bounty.",
+      "actors": "Two keepers, trader.",
+      "steps": ["Keeper1 calls triggerPositionProtection; keeper2 retries or calls updateMarkPrice with extra calldata; trader retries after latch."],
+      "assert": "Only keeper1 is credited exactly the reserved trigger amount once; retry creates a zero Order record.",
+      "foundry_hint": "Read triggerPositionProtection bytes.concat and updateMarkPrice trailing calldata assembly."
+    }
+  },
+  {
+    "id": "L-OR-009",
+    "title": "Public commit or execute path uses expectedConfigHash=0 as an unpinned wildcard",
+    "file": "packages/perps/src/router/OrderLiquidationBatchLogic.sol",
+    "line": 294,
+    "hypothesis": "A trader can pin bytes32(0) on commitOrder/commitProtectedOpen so later oracle/risk finalization does not ConfigMismatch, executing under a policy they did not accept.",
+    "why_not_known_issue": "Would be a new bypass of the nonzero external-hash rule, not the documented internal TP/SL marker.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_validateFreshRequest reverts ExecutionConfigMismatch on zero or unequal hash before registerPending. registerPending treats zero hash as protocolIntent and requires the 0x504c455448455221 client-id prefix; public ids with zero hash never reach that check. Only Router-authenticated trigger/retry builders set hash 0 plus a protocol client id, then registerProtectionAttempt which itself requires hash==0. Execution skips the mismatch check only for that zero marker; receipts still record observedConfigHash.",
+    "poc_spec": {
+      "setup": "Fresh public OrderRequest with expectedConfigHash=0 and a non-protocol client id.",
+      "actors": "Trader.",
+      "steps": ["commitOrder; also try a protocol-prefix id with zero hash."],
+      "assert": "Both revert (ExecutionConfigMismatch or ClientIdDomainMismatch); no pending intent.",
+      "foundry_hint": "OrderLifecycleBook.registerPending protocolIntent vs isProtocolClientOrderId."
+    }
+  },
+  {
+    "id": "L-OR-010",
+    "title": "Execution-config hash omits a finalized execution-authority field so pinned orders survive a real policy change",
+    "file": "packages/perps/src/OrderLifecycleBook.sol",
+    "line": 172,
+    "hypothesis": "currentExecutionConfigHash misses bounty rates, staleness, confidence, planner, oracle address, or engine admin version, so executeOrder still runs after those values change.",
+    "why_not_known_issue": "New hash-coverage hole versus the V5 digest described in SECURITY.md.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "The digest concatenates schema/chain/Book/Router/Engine/Clearinghouse/HousePool, policyEvaluator, executionSidecar, pletherOracle, both admin addresses, both activeConfigVersion values, planner, settlement sidecar, terminal NAV book, protocolTreasury(), and HousePool.markStalenessLimit(). Router/oracle/engine-risk/calendar/freshness finalization increments a hashed version. Oracle numeric policy is not hashed by value but cannot change without RouterAdmin finalization bumping that version. Pause, FAD, frozen, prices, and risk-off cutoff are documented as excluded runtime state.",
+    "poc_spec": {
+      "setup": "Pending pinned open; owner finalizes RouterConfig or Engine risk config.",
+      "actors": "Owner, keeper.",
+      "steps": ["After successful finalize, execute the old order without waiting for expiry."],
+      "assert": "Pre-oracle ConfigMismatch terminal, or executeOrder/clearInvalidOrders classifies it invalid; it does not fill under the new policy.",
+      "foundry_hint": "Compare hash pre/post finalizeRouterConfig; version is incremented after apply."
+    }
+  },
+  {
+    "id": "L-OR-011",
+    "title": "Automatic protocolTreasury activation changes the digest and lets anyone mass-cancel pinned orders",
+    "file": "packages/perps/src/OrderLifecycleBook.sol",
+    "line": 199,
+    "hypothesis": "protocolTreasury() is timestamp-resolved and hashed, so a scheduled successor silently changes currentExecutionConfigHash at lock expiry without bumping activeConfigVersion, enabling permissionless clearInvalidOrders of every pinned live order.",
+    "why_not_known_issue": "Looks like a new cancel vector because no RouterAdmin tx occurs at activation.",
+    "impact": "C",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "SECURITY.md lists protocol treasury as an execution-authority input whose drift is supposed to produce terminal ConfigMismatch for config-pinned external orders. Activation is owner-scheduled. Unpinned protection attempts are the documented exception. This is the same ConfigMismatch cleanup family, not a trader cancel or hash bypass of a still-matching digest.",
+    "poc_spec": {
+      "setup": "Owner proposes a successor treasury; traders pin current hash; warp to lock expiry.",
+      "actors": "Owner (setup), keeper.",
+      "steps": ["After expiry, read currentExecutionConfigHash vs pending.bounds; call clearInvalidOrders."],
+      "assert": "Pinned orders are ConfigMismatch-terminal by design; protection-attempt hash-0 closes still executable.",
+      "foundry_hint": "CfdTreasury.protocolTreasury resolves _activeTreasury by timestamp."
+    }
+  },
+  {
+    "id": "L-OR-012",
+    "title": "Historical unique-parse / batch cache reuse executes a skipped post-commit tick",
+    "file": "packages/perps/src/OrderRouterExecutionSidecar.sol",
+    "line": 1074,
+    "hypothesis": "Batch cache reuse accepts a later FIFO order at a cached publishTime even when a unique first tick after that order's commitTime exists, i.e. remaining MED-16 stale-cache extraction.",
+    "why_not_known_issue": "Would need a new reuse predicate hole after unique parse + previous-tick coverage, not the known live-component selection or HIGH-1 sequencer/Pyth clocks.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Cache is filled only after parsePriceFeedUpdatesUnique over (commitTime, min(commitTime+window, now)]. Reuse requires commitTime>=minReusableCommitTime, commitTime<oldestPublishTime, commitTime<publishTime, publishTime<=now, and publishTime<=commitTime+window. The originating unique parse is the first tick after the earliest commit; later FIFO commits cannot see an earlier skipped tick in that same range. The Router never accepts a keeper-supplied cache. Live older-component choice remains the documented HIGH-1/MED-7 family.",
+    "poc_spec": {
+      "setup": "Two FIFO orders with commitTimes t1<t2 and two Pyth baskets at t1+eps and t2+eps inside the settlement window.",
+      "actors": "Keeper executing a batch.",
+      "steps": ["Parse unique basket for order1; attempt reuse for order2 if a distinct first tick after t2 exists."],
+      "assert": "Reuse rejected whenever order2's first unique tick is not the cached tick; no net extraction beyond sequencer/Pyth clock alignment.",
+      "foundry_hint": "Compare sidecar _canReuseHistoricalBatchBasket with PletherOracle._canReuseHistoricalBatchBasket and parsePriceFeedUpdatesUnique bounds."
+    }
+  },
+  {
+    "id": "L-OR-013",
+    "title": "Oracle freshness/confidence gates fail open for live execution or liquidation",
+    "file": "packages/perps/src/libraries/OracleFreshnessPolicyLib.sol",
+    "line": 49,
+    "hypothesis": "isStale equality, missing component-confidence ceiling, or OpenExecution policy applied to closes lets a wide/stale basket price trades or liquidations.",
+    "why_not_known_issue": "Must be a new fail-open versus the documented basket-only confidence gate and frozen liveness trade-off.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "isStale rejects future publish times and age>maxStaleness (equality passes, as documented). Historical execution uses unique parse plus maxComponentPublishTimeDivergence; live/liquidation use signed current baskets, LIVE_TICK_LOOKBACK, per-feed staleness, and basketConfidence*10000>price*ratio revert (equality passes). Inverse feeds revert if conf>=raw price. Adverse shift product is config-bounded strictly below 100% of price; ZeroExecutionPrice reverts if a shift would consume the price. Frozen voluntary closes keep width validation and replace the shift with the fixed spread. No independent per-component confidence ceiling is an explicit known limitation, not a bypass.",
+    "poc_spec": {
+      "setup": "Basket with weighted confidence exactly at ratio; one low-weight wide feed; frozen vs live close.",
+      "actors": "Keeper.",
+      "steps": ["Submit boundary-confidence updates; attempt execution/liquidation/frozen close."],
+      "assert": "Over-width reverts; equality executes; frozen close unshifted; opens in FAD/frozen are closeOnly pending, not silently filled.",
+      "foundry_hint": "PletherOracle._computeBasketPriceFromFeeds and _orderExecutionPrice frozen-close branch."
+    }
+  },
+  {
+    "id": "L-OR-014",
+    "title": "Execution/recovery/liquidation sidecar delegatecall writes Router storage or impersonates the Router from a foreign host",
+    "file": "packages/perps/src/OrderRouterExecutionSidecar.sol",
+    "line": 98,
+    "hypothesis": "Sidecar contracts declare storage that collides with OrderRouter slots under delegatecall, or a foreign delegate host can reach Engine/Book as the Router.",
+    "why_not_known_issue": "New storage-layout or auth break versus the documented storage-layout-independent sidecars.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Execution and recovery sidecars have only immutables (SELF, recoverySidecar) and no mappings. Liquidation sidecar has immutable ROUTER and requires address(this)==ROUTER. Direct calls revert OnlyDelegateCall/RecoveryUnauthorized. Nested recovery delegatecall still runs in the Router context; item helpers require msg.sender==address(this). Engine, Book, and Clearinghouse authenticate the real Router address, so a foreign delegate host cannot processOrderTyped, finalize, or take Order bounties. Router item callbacks are _onlySelfCall.",
+    "poc_spec": {
+      "setup": "Deployed Router plus the three sidecar addresses.",
+      "actors": "Attacker contract.",
+      "steps": ["Call sidecar entrypoints directly; delegatecall them from a foreign host; call executeOrderItemFromSidecar/settleOrderFromSidecar as EOA."],
+      "assert": "All revert; Router slots nextExecuteId/orderRecords unchanged.",
+      "foundry_hint": "Compare sidecar declared state vs OrderValidation/OrderQueueBook slot 0."
+    }
+  },
+  {
+    "id": "L-OR-015",
+    "title": "Liquidation batch item mutates another account or keeps partial bounty forfeiture on revert",
+    "file": "packages/perps/src/router/OrderLiquidationBatchLogic.sol",
+    "line": 738,
+    "hypothesis": "A reverting account in executeLiquidationBatch leaves forfeited bounties or queue unlinks, or uses the wrong side's adverse price, or continues after an empty OOG revert and corrupts the next account.",
+    "why_not_known_issue": "New isolation hole versus the documented per-account rollback frame.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Shared snapshot is priced once (longPrice/shortPrice/neutral). Each account is an external self-call executeLiquidationBatchItem; try/catch restores that account on revert. Empty returndata stops the batch and leaves that index unattempted. Nonempty NoPosition/Solvent are skipped without losing prior successes. Side selection is positions(account).side. Risk-off refunds that restore solvency return uint256.max inside a successful item (documented keep-refunds path). Engine-only liquidatePosition plus same-tx atomicity means an outer revert rolls the whole call back; prefix persistence requires the outer function to return, which the tail-gas check is written to do.",
+    "poc_spec": {
+      "setup": "Two liquidatable accounts and one solvent; batch of three.",
+      "actors": "Keeper.",
+      "steps": ["Run executeLiquidationBatch; force the second item to revert with empty data and with PositionIsSolvent."],
+      "assert": "First liquidation persists only when the outer call returns; second empty revert does not attempt the third; solvent skip does not forfeit that account's bounty.",
+      "foundry_hint": "OrderLiquidationHandler.executeLiquidationBatchItem try/catch in OrderLiquidationBatchLogic."
+    }
+  },
+  {
+    "id": "L-OR-016",
+    "title": "minPostSettlementBalanceAssets floor is not enforced on withdraw or is bound to the wrong order",
+    "file": "packages/perps/src/libraries/OrderSettlementFloorLib.sol",
+    "line": 19,
+    "hypothesis": "Withdrawal can drop custody below a pending open's minPostSettlementBalanceAssets because load() only reads accountHeadOrderId, or because a later floor order is not the head, or because depositFor/addMargin/settleTraderClaim skip the check.",
+    "why_not_known_issue": "New floor bypass versus the documented flat-account open-only floor.",
+    "impact": "F-",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Positive min is rejected unless the account is flat, the request is an open, and accountHeadOrderId==0, so the floor order is always the sole account-queue head. Later commits revert SettlementFloorOrderPending. validateWithdraw, only when position size is 0, loads that head's min and maxGrossDebit and blocks withdraw below min+maxDebit. addMargin requires an open position. Execution still _requireMinimum(PostSettlementBalance) on the order's own bounds. Exact replay does not create a second floor order. Attached protection uses the same parent floor until the parent executes.",
+    "poc_spec": {
+      "setup": "Flat account commits an open with minPostSettlementBalanceAssets=M and maxGrossAccountDebit=G, funded exactly M+G.",
+      "actors": "Trader.",
+      "steps": ["withdrawMargin(1); commit a second order; after execute, withdraw remaining."],
+      "assert": "Pre-execution withdraw reverts SettlementFloorWithdrawal; second commit reverts SettlementFloorOrderPending; post-success withdraw of residual is allowed.",
+      "foundry_hint": "OrderSettlementFloor.t.sol already encodes these predicates; do not add tests."
+    }
+  },
+  {
+    "id": "L-OR-017",
+    "title": "Historical oracle calls are permissionless so a keeper-supplied BatchOrderPriceCache can price a fill",
+    "file": "packages/perps/src/PletherOracle.sol",
+    "line": 245,
+    "hypothesis": "Because updateOrderExecutionPrice/updateBatchOrderExecutionPrice do not require msg.sender==Router (delegatecall leaves msg.sender as the keeper), a fabricated cache.price can be used for settlement.",
+    "why_not_known_issue": "New unauthenticated-price path, not MED-7 live older signed components.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Historical entrypoints are intentionally permissionless because Router delegatecall preserves the keeper as msg.sender. Live updatePrice/liquidation snapshots do check orderRouter(). The sidecar never ABI-decodes a keeper cache; it only reuses the cache struct returned by the previous successful unique parse in the same batch. Direct oracle calls with a fake cache cannot reach processOrderTyped. IPletherOracle documents that fabricated caches are not price-authenticated and that the Router accepts no external cache.",
+    "poc_spec": {
+      "setup": "Pending order; attacker contract holding a forged BatchOrderPriceCache.",
+      "actors": "Keeper/attacker.",
+      "steps": ["Call updateBatchOrderExecutionPrice directly with forged prices; then executeOrderBatch through the Router."],
+      "assert": "Direct call does not mutate Engine/positions; Router fill uses unique-parse or sidecar-held cache from that parse, not the forged struct.",
+      "foundry_hint": "OrderRouterExecutionSidecar._prepareBatchOracle state.oracleCache assignment."
+    }
+  },
+  {
+    "id": "L-OR-018",
+    "title": "Close-only FAD/frozen open at the FIFO head blocks later risk-reducing closes",
+    "file": "packages/perps/src/OrderRouterExecutionSidecar.sol",
+    "line": 442,
+    "hypothesis": "A pending open that becomes closeOnly is left Pending, so executeOrder/executeOrderBatch cannot reach later closes or protection attempts until expiry.",
+    "why_not_known_issue": "Looks like FIFO skip/DoS, but it is already recorded in audits/scan-plether-fi-plether-core-d4541b49.md as a Low and described in SECURITY.md queue-failure handling (close-only remains nonterminal).",
+    "impact": "C",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Known issue in audits/ plus SECURITY.md: close-only, MEV, insufficient gas, and mark-ordering stay nonterminal and retain the FIFO head. Default window is 60 seconds. Not a new root cause.",
+    "poc_spec": {
+      "setup": "Commit an open immediately before FAD/close-only; queue a later close.",
+      "actors": "Attacker trader, victim with a close, keeper.",
+      "steps": ["After close-only, executeOrder(head) then attempt the later close by id."],
+      "assert": "Head returns Pending(CloseOnly); later close reverts OrderNotQueueHead. Known, do not report.",
+      "foundry_hint": "Scan finding evidence already cites these lines."
+    }
+  }
+]
