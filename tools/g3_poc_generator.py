@@ -55,7 +55,14 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
         return '        _commitAs(ATTACKER, _openReq("c", _long(), 60));'
     if fn in {"executeOrder", "executeOpen"}:
         if "price_print_then_mutate" in strategies:
-            return "        router.executeOrder(lastCommitId, _mockPythUpdateData(1.5e8));"
+            return (
+                "        OrderV3Types.ExecutionResult memory execResult = "
+                "router.executeOrder(lastCommitId, _mockPythUpdateData(1.5e8));\n"
+                "        require(\n"
+                "            uint8(execResult.status) == uint8(OrderV3Types.LifecycleStatus.Executed),\n"
+                '            "pending execute after print failed"\n'
+                "        );"
+            )
         side = "_short()" if "skew_seed" in strategies else "_long()"
         return (
             f'        uint64 oid = _commitAs(ATTACKER, _openReq("x", {side}, 60));\n'
@@ -161,6 +168,8 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
             "        );"
         )
     if var in {"freeSettlement", "freeBalance"}:
+        if "price_print_then_mutate" in strategies and function.startswith("execute"):
+            return ""
         return (
             '        require(_freeOf(ATTACKER) < snapshotFree, "free settlement did not drop");'
         )

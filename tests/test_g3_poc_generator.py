@@ -47,6 +47,7 @@ class G3PocGeneratorTests(unittest.TestCase):
         src = render_test("executeOrder", "freeSettlement", "delayed-order-optionality")
         self.assertIn("lastCommitId = _commitAs", src)
         self.assertIn("executeOrder(lastCommitId", src)
+        self.assertIn("LifecycleStatus.Executed", src)
         self.assertNotIn('_openReq("x"', src)
 
     def test_addmargin_emits_free_snapshot_and_price_print(self):

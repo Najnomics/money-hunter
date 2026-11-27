@@ -55,6 +55,8 @@ class OverlaySelectionTests(unittest.TestCase):
         self.assertIn("committedOrderMarginAssets[account] > 0", src)
         self.assertIn("router/OrderLiquidationBatchLogic.sol", src)
         self.assertIn("OrderRouter__SettlementFloorOrderPending(0)", src)
+        self.assertIn("OrderRouterExecutionSidecar.sol", src)
+        self.assertIn("liveSize > 0", src)
 
 
 if __name__ == "__main__":

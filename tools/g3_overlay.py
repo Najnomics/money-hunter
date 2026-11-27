@@ -122,6 +122,26 @@ def _patches() -> dict[str, list[tuple[str, str, str]]]:
                 "        }\n\n"
                 "        _validateFreshRequest(host, account, request, enforceProtectionLock);",
             ),
+            (
+                "OrderRouterExecutionSidecar.sol",
+                "        IOrderRouterExecutionHost host = IOrderRouterExecutionHost(address(this));\n"
+                "        uint64 head = host.nextExecuteId();\n"
+                "        if (head == 0) {\n"
+                "            revert OrderRouter__NoOrdersToExecute();\n"
+                "        }",
+                "        IOrderRouterExecutionHost host = IOrderRouterExecutionHost(address(this));\n"
+                "        uint64 head = host.nextExecuteId();\n"
+                "        if (head == 0) {\n"
+                "            revert OrderRouter__NoOrdersToExecute();\n"
+                "        }\n"
+                "        {\n"
+                "            IOrderRouterExecutionHost.OrderView memory headView = host.getOrderForSidecar(head);\n"
+                "            (uint256 liveSize,,,,,,) = ICfdEngineCore(host.engine()).positions(headView.order.account);\n"
+                "            if (liveSize > 0) {\n"
+                "                revert OrderRouter__NoOrdersToExecute();\n"
+                "            }\n"
+                "        }",
+            ),
         ],
         "assign_outstanding": [
             (
