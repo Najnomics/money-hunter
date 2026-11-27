@@ -8,26 +8,26 @@ Never submit. Pin `v6.10.0` `d83ed91f96701209613720708f36ffce0e98ed33`. Four gat
 
 ## Passes
 
-| Pass | Method | Surfaces |
-|---|---|---|
-| 1 | Money Hunter `strict` on `verify.rs`, zkvm lib verify, `crates/core/executor/src` | Apex: 2 DIV (unmapped name matcher), 1 H-*, 1 prepared E-*, H-0001 disproved, **0 verified** |
-| 2 | Boss-skill executor/syscalls | `VERIFY_SP1_PROOF` (`0x1B`), nested verify lib, minimal ecall `Ok(None)` for nested/commit |
-| 3 | Boss-skill recursion/hypercube/slop | `crates/recursion`, `crates/hypercube`, `slop/crates` excluding whir/veil/spartan/pgspcs; v6.10.0 REMW JIT note |
+| Pass | Method | Surfaces | G3 |
+|---|---|---|---|
+| 1 | cargo verifier/prover | wrap VK deserialize; `test_vk_root_bytes` | both ok |
+| 2 | cargo recursion circuit | `test_sumcheck`, `test_sumcheck_failure` | both ok |
+| 3 | cargo runner + JIT | panic exit_code; remw i32::MIN%-1 | both ok; L-EXIT still OOS |
 
 ## Leads
 
 | ID | Claim | Gate | Disposition |
 |---|---|---|---|
-| L-EXIT | Non-zero exit_code verifies | G1 kill | `verify.rs:295` rejects unless `experimental`. Immunefi OOS. DP-0001. |
+| L-EXIT | Non-zero exit_code verifies | G3 kill / OOS | Runner panic exit_code==1; `verify.rs:295` still experimental-gated. |
 | L-NONCE | proof_nonce soundness | G1 kill | Program OOS. Cross-shard equality checked at 301–314. |
 | L-NEST | Core proof of `VERIFY_SP1_PROOF` ELF | G1 kill | Security model OOS. Minimal ecall returns `Ok(None)` for that syscall (deferred). |
-| L-REMW | x86 JIT remw i32::MIN % -1 | G1 kill | Completeness must be AIR/circuit/verifier, not JIT backend. v6.10.0 changelog lists this as a **fix in the pin**. |
+| L-REMW | x86 JIT remw i32::MIN % -1 | G3 kill | `test_remw_overflow_int_min_mod_minus_one` PASS on pin. |
 | L-SLOP | slop whir/veil/spartan/pgspcs | G1 kill | Named OOS crates. |
 | L-EXP | experimental / mprotect / dummy circuits | G1 kill | Feature OOS. |
 | L-DIV-MAP | Apex unmapped F-VER/F-EXEC | n/a | Matcher noise; functions exist at `verify.rs:109`. |
 
-No G3 SNARK/core end-to-end run (`cargo prove` not installed). **Verified: 0.**
+G3 executed 2026-11-27 after `sp1up`. Commands: `G3-EXECUTED.md`. Full Groth16/core prove+verify not run (timeout 300). **Verified: 0.**
 
-## Strongest dropped lead
+## Strongest dropped lead (executed)
 
-**L-EXIT:** verifying a failed guest (non-zero exit) as a successful execution. Dies because production verify already requires zero exit_code and Immunefi marks the remaining experimental path OOS.
+**L-EXIT:** verifying a failed guest as successful. G3: `test_guest_stderr_forwarding` **PASS** (panic `exit_code==1`). `verify.rs:295` still rejects non-zero without `experimental` (OOS). **L-REMW:** `test_remw_overflow_int_min_mod_minus_one` **PASS** on v6.10.0.
