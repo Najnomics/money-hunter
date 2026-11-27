@@ -42,7 +42,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     SequenceStrategy(
         id="epoch_advance",
         when_fn=_re(r"settleLp|epoch|reconcile|requestDeposit|requestRedeem"),
-        when_var=_re(r"."),
+        when_var=_re(r"sharePrice|totalAssets|\bnav\b|rebate|unassigned|pnlPledge|protocolTreasury|totalSupply|pledge"),
         when_family=frozenset(),
         setup="_queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();",
         why=(
@@ -53,7 +53,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     SequenceStrategy(
         id="second_epoch",
         when_fn=_re(r"settleLp|epoch|reconcile"),
-        when_var=_re(r"highWaterMark|seniorPrincipal|unassigned"),
+        when_var=_re(r"unassigned"),
         when_family=frozenset({"hwm-recap-accounting"}),
         setup="_queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();",
         why=(
@@ -176,17 +176,6 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         why=(
             "Admission backing is revealed when an opposite-side winner already exists. "
             "A lone open into thin cash does not latch degradedMode."
-        ),
-    ),
-    SequenceStrategy(
-        id="drain_after_hedge",
-        when_fn=_re(r"executeOpen"),
-        when_var=_re(r"degradedMode|emergency"),
-        when_family=frozenset({"false-emergency-mode"}),
-        setup="_thinPoolTo(25_000e6);",
-        why=(
-            "After the counterparty fill, drain remaining cash so admission spends "
-            "backing already owed to the winner."
         ),
     ),
     SequenceStrategy(

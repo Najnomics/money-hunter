@@ -119,27 +119,24 @@ class SequenceSelectionTests(unittest.TestCase):
         chosen = select_strategies("reconcile", "highWaterMark", "hwm-recap-accounting")
         self.assertIn("pending_recap", chosen)
         self.assertIn("second_pass", chosen)
-        self.assertIn("second_epoch", chosen)
+        self.assertNotIn("second_epoch", chosen)
+        self.assertNotIn("epoch_advance", chosen)
         src = setup_block("reconcile", "highWaterMark", "hwm-recap-accounting")
         self.assertIn("_seedPendingRecap", src)
-        self.assertGreaterEqual(src.count("_warpToDepositEpoch"), 2)
-        self.assertLess(src.rindex("_warpToDepositEpoch"), src.index("_seedPendingRecap"))
+        self.assertNotIn("_queueDeposit", src)
 
     def test_execute_open_degraded_opens_into_thin_cash_not_a_second_long(self):
         chosen = select_strategies("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("thin_pool", chosen)
         self.assertIn("counterparty_open", chosen)
         self.assertIn("legal_mark_search", chosen)
-        self.assertIn("drain_after_hedge", chosen)
         self.assertNotIn("drain_cash", chosen)
         self.assertNotIn("multi_actor_hedge", chosen)
         src = setup_block("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("_thinPool();", src)
         self.assertIn("_openFilled(VICTIM, _short()", src)
-        self.assertIn("_thinPoolTo(25_000e6)", src)
         self.assertNotIn("_publish(1.5e8)", src)
         self.assertNotIn("_thinPoolTo(10_000e6)", src)
-        self.assertLess(src.index("_openFilled(VICTIM, _short()"), src.index("_thinPoolTo(25_000e6)"))
 
     def test_liquidation_freesettlement_sweeps_until_unsafe(self):
         chosen = select_strategies(

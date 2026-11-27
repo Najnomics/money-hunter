@@ -96,17 +96,14 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("seniorHighWaterMark() != snapshotHwm", src)
         self.assertIn("pendingRecapitalizationAssets() > 0", src)
         self.assertGreaterEqual(src.count("_trySettleLpEpoch()"), 2)
-        self.assertGreaterEqual(src.count("_warpToDepositEpoch"), 2)
         self.assertLess(src.index("_snapshotHwm"), src.index("_trySettleLpEpoch"))
-        snap = src.index("_snapshotHwm")
-        self.assertNotIn("_queueDeposit", src[snap:])
+        self.assertNotIn("_queueDeposit", src)
 
     def test_execute_open_degraded_closes_the_counterparty(self):
         src = render_test("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("_openFilled(VICTIM, _short()", src)
         self.assertIn("_closeFilled(VICTIM)", src)
         self.assertIn("_thinPool()", src)
-        self.assertIn("_thinPoolTo(25_000e6)", src)
         self.assertIn("_openAtFirstLegalMark", src)
         self.assertLess(src.index("_closeFilled(VICTIM)"), src.index("_openAtFirstLegalMark"))
 

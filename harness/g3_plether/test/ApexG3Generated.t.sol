@@ -106,10 +106,6 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_reconcile_highWaterMark() public {
-        // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
-        _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        // strategy:second_epoch — A leftover residual freezes the next requestDeposit. Queue a second matured epoch before seeding residual so a later observation still has a head.
-        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
         // strategy:unowned_residual — Write leftover into the unassigned bucket after the deposit is queued. Minting it before requestDeposit freezes the vault; accountExcess after a matured head consumes the epoch.
         _seedUnownedResidual(1e6);
         // strategy:pending_recap — HWM/senior overwrite needs a leftover recap bucket. An unowned mint alone does not create a claimant residual for a second observation.
@@ -126,10 +122,6 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_settleLpEpoch_seniorPrincipal() public {
-        // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
-        _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        // strategy:second_epoch — A leftover residual freezes the next requestDeposit. Queue a second matured epoch before seeding residual so a later observation still has a head.
-        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
         // strategy:pending_recap — HWM/senior overwrite needs a leftover recap bucket. An unowned mint alone does not create a claimant residual for a second observation.
         _seedPendingRecap(1e6);
         // strategy:second_pass — HWM/recap overwrite is a second observation of the same books, not the first solvent epoch. The second matured head is queued in second_epoch before residual; do not requestDeposit after leftover is live.
@@ -282,8 +274,6 @@ contract ApexG3GeneratedTest is G3Sequence {
         _thinPool();
         // strategy:counterparty_open — Admission backing is revealed when an opposite-side winner already exists. A lone open into thin cash does not latch degradedMode.
         _openFilled(VICTIM, _short(), 60);
-        // strategy:drain_after_hedge — After the counterparty fill, drain remaining cash so admission spends backing already owed to the winner.
-        _thinPoolTo(25_000e6);
         // strategy:legal_mark_search — A hardcoded seed or 1.5x print is often skew-illegal after a counterparty fill. Search marks until executeOpen admits, then close the winner.
         _closeFilled(VICTIM);
         _openAtFirstLegalMark(ATTACKER, _long());
