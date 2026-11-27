@@ -40,7 +40,7 @@ NAMED_OPEN_IDS: tuple[str, ...] = (
 
 # Honest SCORE-B: exact test PASSed on a82d4fe and FAILed on the local patch.
 VERIFIED_IDS: frozenset[str] = frozenset(
-    {"97906", "98172", "99075", "97628", "99136"}
+    {"97906", "98172", "99075", "97628", "99136", "97591", "98209", "98854", "97590"}
 )
 
 
