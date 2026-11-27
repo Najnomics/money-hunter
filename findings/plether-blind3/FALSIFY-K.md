@@ -42,6 +42,10 @@ Slices of 3–5 unique tests; this file is appended after each slice.
 | `commitOrder_traderClaimBalance` | `pending_order` | 99551 | PASS | FAIL SettlementFloorOrderPending | HOLD |
 | `convertToShares_totalSupply` | `overflow_headroom` | 97628 | PASS | FAIL conversion not frozen | HOLD |
 | `evaluateOpen_acceptedBasket` | `first_tick` | 98762 | PASS | FAIL mark | HOLD |
+| `evaluateOpen_freeSettlement` | `pending_order` | 98170 | PASS | FAIL SettlementFloorOrderPending | HOLD |
+| `executeClose_degradedMode` | `margin_backing` | 97590 | PASS | FAIL did not latch | HOLD |
+| `executeClose_traderClaimBalance` | `pending_order` | 100087 | PASS | FAIL SettlementFloorOrderPending | HOLD |
+| `executeClose_vpiRebateReserve` | `zero_vpi` | 97903, 97748, 99933 | PASS | FAIL rebate no-op | HOLD |
 
 ## Slice log
 
@@ -62,3 +66,7 @@ Slices run oldest-name first. HOLD = pin PASS + matching overlay FAIL. DEMOTED =
 ### Slice 4 (unique 13–16)
 
 4/4 HOLD. Cumulative HOLD unique 16/43.
+
+### Slice 5 (unique 17–20)
+
+4/4 HOLD. Cumulative HOLD unique 20/43. Zeroing open/close execution fees in `zero_vpi` did not demote rebate close.
