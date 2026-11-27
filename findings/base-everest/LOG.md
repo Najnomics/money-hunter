@@ -21,22 +21,22 @@ See `findings/TOOLCHAINS.md`. Foundry forge 1.10.1 and SP1 cargo-prove `d83ed91`
 
 ## Passes
 
-| Pass | Method | Surfaces |
-|---|---|---|
-| 1 | Money Hunter phases 0–6 | `src/` of contracts pin (80 Solidity files) |
-| 2 | Boss-skill TEE/nitro/multiproof | AggregateVerifier, TEEVerifier, TEEProverRegistry, NitroValidator, SystemConfig.pause, OptimismPortal2.finalize |
-| 3 | Boss-skill Everest client | replay_id / nonce-free pool, gas-limit billing tests, B20 supply-cap golden tests |
+| Pass | Method | Surfaces | G3 executed? |
+|---|---|---|---|
+| 1 | Forge on TEEProverRegistry | `registerSigner` unauthorized + debug PCR0 + owner happy path | yes, 3/3 PASS (attack fails) |
+| 2 | Forge on pause/portal/games | SystemConfig pause fuzz; OptimismPortal2 finalize; Challenge; Nullify; TEEVerifier | yes, all matched tests PASS |
+| 3 | Nitro forge + B20 cargo | `test_AttestationReplayHasNoOnChainProtection`; B20 `golden_mint_reverts_over_supply_cap` | yes; txpool rocksdb compile fail |
 
 ## Leads
 
 | ID | Pass | Surface | Claim | Gate | Disposition |
 |---|---|---|---|---|---|
-| L-TEE-001 | 1+2 | `TEEProverRegistry.sol:154-176` | Unprivileged debug-PCR attestation registers a production signer | G1 kill | `registerSigner` is `onlyOwnerOrManager`. Debug PCR0 hash reverts `InvalidPCR0`. Trusted-role malice OOS. H-0001 DP-0001 disproved. |
-| L-NITRO-001 | 2 | `NitroValidator.sol:107-120` | Library accepts debug PCR / no freshness | G1 kill | Documented integrator duties; KI-32. Base registry enforces age + debug PCR0. Not a new RC. |
-| L-SYS-001 | 2 | `SystemConfig.sol:598-626` | Unprivileged pause | G1 kill | Guardian or Incident Responder only; unpause Guardian-only. Trusted roles OOS. |
-| L-AGG-001 | 2 | `AggregateVerifier.sol:580-648` | `challenge()`/`nullify()` lack `gameOver()` | G1 kill | Program **intended behavior**. |
-| L-AGG-002 | 2 | `AggregateVerifier.sol:515` / `TEEVerifier.sol:57` | Anyone can `verifyProposalProof` a forged TEE sig | G1 kill | Journal binds `TEE_IMAGE_HASH`+`CONFIG_HASH`; TEEVerifier requires registered signer + `isValidProposer` (owner-set) + image match. |
-| L-PORTAL-001 | 2 | `OptimismPortal2.sol:461-486` | Failed target call still finalizes | G1 kill | Matches OP Stack; delegated-EOA failure reverts (rolls back). OP-matching behaviour OOS. `checkWithdrawal` requires `isGameClaimValid`. |
+| L-TEE-001 | 1+2 | `TEEProverRegistry.sol:154-176` | Unprivileged debug-PCR attestation registers a production signer | G3 kill | forge: unauthorized revert + `InvalidPCR0`. |
+| L-NITRO-001 | 2 | `NitroValidator.sol:107-120` | Library accepts debug PCR / no freshness | G3 confirm KI-32 | `test_AttestationReplayHasNoOnChainProtection` PASS (documented). Registry still rejects debug PCR0. |
+| L-SYS-001 | 2 | `SystemConfig.sol:598-626` | Unprivileged pause | G3 kill | `testFuzz_pause_notGuardianOrIncidentResponder_reverts` PASS. |
+| L-AGG-001 | 2 | `AggregateVerifier.sol:580-648` | `challenge()`/`nullify()` lack `gameOver()` | G3 intended | Challenge 10 + Nullify 9 PASS as written (sequencing, not auth hole). |
+| L-AGG-002 | 2 | `AggregateVerifier.sol:515` / `TEEVerifier.sol:57` | Anyone can `verifyProposalProof` a forged TEE sig | G3 kill | TEEVerifier: unregistered signer / invalid proposer / image mismatch FAIL verify. |
+| L-PORTAL-001 | 2 | `OptimismPortal2.sol:461-486` | Failed target call still finalizes | G3 kill | `delegatedTargetFails_reverts` PASS; `targetFails_fails` PASS (OP-matching). |
 | L-ASR-001 | 2 | `AnchorStateRegistry.sol` | Unprivileged blacklist/retire | G1 kill | Guardian-gated in ASR (trusted). |
 | L-KI-* | 1 | SCOPE known-issues table | Re-report KI-02..KI-61 | G1 kill | Public known issues / audits. |
 | L-POOL-001 | 3 | `txpool` replay_id | Nonce-free twin after mine | G1 kill | KI-10 residual race. Tests in `pool.rs` cover mined replay_id eviction. |
@@ -45,12 +45,10 @@ See `findings/TOOLCHAINS.md`. Foundry forge 1.10.1 and SP1 cargo-prove `d83ed91`
 | L-VAULT-* | 1 | Apex seed/never_generated H-0002+ | Share-price families on L2 proof contracts | G1 kill | Wrong protocol. Not Base NAV/vault. |
 | L-DIV-0001 | 1 | unmapped F-TEE | NitroValidator not in contracts workspace | G1 keep as coverage gap | Workspace split, not a bug. Pass 2 closed the attestation path in the nitro pin. |
 
-No lead reached G3 distinguishing execute=true on pinned code. **Verified findings: 0. No FINDING-*.md.**
+G3 was executed 2026-11-27 after Foundry install. Commands and logs: `G3-EXECUTED.md`. No attack reproduced. **Verified findings: 0. No FINDING-*.md.**
 
-## Strongest dropped lead
+## Strongest dropped lead (executed)
 
 **L-TEE-001 / L-NITRO-001:** debug-mode AWS Nitro attestation (all-zero PCR) into the production signer set.
 
-Why it looked live: NitroValidator explicitly does not enforce PCR/freshness (KI-32 text in-code). Registry comments say registration is PCR0-agnostic for pre-hardfork.
-
-Why it died: `registerSigner` is privileged; debug PCR0 is a hard revert; TEEVerifier still checks `signerImageHash == AggregateVerifier.TEE_IMAGE_HASH` at proof time. Unprivileged path does not exist. G3 was not executed because G1 already killed reachability; forge was not installed.
+G3 outcome: `test_registerSigner_unauthorized_reverts` **PASS**; `test_registerSigner_debugModePCR0_reverts` **PASS** on pin `b9b76d97`. `test_AttestationReplayHasNoOnChainProtection` **PASS** on nitro pin `0ea0d123` (library has no freshness — KI-32). Integrator (registry) still rejects debug PCR0 and unprivileged callers. Not a finding.
