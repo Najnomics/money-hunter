@@ -32,7 +32,7 @@ from schemas.phase3 import (
     Surface,
     ToolRun,
 )
-from tools._shared import existing_ids, next_id, source_exts
+from tools._shared import entry_token, existing_ids, next_id, source_exts
 from validation import validate_cite
 
 AUTH_RE = re.compile(
@@ -42,10 +42,21 @@ AUTH_RE = re.compile(
 )
 AUTH_BOUNDARY_RE = re.compile(r"(auth|role|admin|permission|privilege|owner|signer|session|token)", re.I)
 SINK_WORDS = re.compile(
-    r"(withdraw|transfer|mint|burn|sweep|execute|upgrade|admin|owner|pause|unpause|"
-    r"delegate|approve|set[A-Z]|update|delete|destroy|kill|callback|settle|liquidat)",
+    r"(withdraw|transfer|mint|burn|sweep|execute|upgrade|\badmin\b|\bowner\b|pause|unpause|"
+    r"delegate|approve|set[A-Z]|update|delete|destroy|kill|callback|"
+    r"\bsettle\b|\bsettlement\b|liquidat)",
     re.I,
 )
+GETTER_OR_MODIFIER = re.compile(
+    r"^(?:get|is|has|preview|simulate|quote|convertTo|total|balanceOf|only[A-Z])",
+)
+# `settlementAsset` / `settlementToken` contain "settle" as a substring; they are views.
+VIEWISH_SETTLEMENT = re.compile(
+    r"settlement(?:Asset|Token|Sidecar|Buffer)|onlySettlement",
+    re.I,
+)
+UNDOCUMENTED_CAP = 200
+SLITHER_RAN_CODES = {0, 1, 255}
 
 # Audit production behaviour, not the target's own tests.  A test named
 # `test_withdraw` used to look like a value-sink entrypoint and flooded the map.
@@ -79,18 +90,37 @@ def _scope_paths(ctx: ToolContext) -> list[str]:
 
 
 def _match_surfaces(entry: str, surfaces: list[Surface]) -> list[Surface]:
-    lowered = entry.lower().strip()
-    token = re.split(r"[(:]", lowered)[-1]
-    token = token.split()[-1] if token.split() else token
+    """Match ``Contract.fn(types)`` to surfaces by function name, not ABI types.
+
+    Splitting on the *last* ``(`` token used to turn
+    ``MarginClearinghouse.depositFor(address,uint256)`` into ``uint256``.
+    """
+    token = entry_token(entry).lower()
+    if not token:
+        return []
+    contract = ""
+    head = entry.strip().split("(", 1)[0]
+    if "." in head:
+        contract = head.rsplit(".", 1)[0].split()[-1].lower()
     matches: list[Surface] = []
     for surface in surfaces:
         name = surface.name.lower()
-        if name == token:
+        if name == token or name.endswith("." + token):
             matches.append(surface)
-        elif len(token) >= 4 and (token in name or name in token):
+            continue
+        if token.startswith("/") and surface.kind == "route" and name == token:
             matches.append(surface)
-        elif token.startswith("/") and surface.kind == "route" and (surface.name.lower() == token):
+            continue
+        if (
+            contract
+            and name == token
+            and contract in surface.file.lower().replace("\\", "/")
+        ):
             matches.append(surface)
+    if len(matches) > 1 and contract:
+        preferred = [m for m in matches if contract in m.file.lower().replace("\\", "/")]
+        if preferred:
+            return preferred
     return matches
 
 
@@ -202,9 +232,13 @@ def ast_divergence_mapper(ctx: ToolContext, inp: ASTMapInput) -> ASTMapOutput:
     flow_tokens = [str(f.get("entry", "")).lower() for f in flows]
     undocumented = 0
     for surface in surfaces:
-        if not surface.entry or not SINK_WORDS.search(surface.name) or undocumented >= 50:
+        if not surface.entry or undocumented >= UNDOCUMENTED_CAP:
             continue
-        if any(surface.name.lower() in token for token in flow_tokens):
+        if GETTER_OR_MODIFIER.search(surface.name) or VIEWISH_SETTLEMENT.search(surface.name):
+            continue
+        if not SINK_WORDS.search(surface.name):
+            continue
+        if any(surface.name.lower() in token or entry_token(token) == surface.name.lower() for token in flow_tokens):
             continue
         divergences.append(
             Divergence(
@@ -354,7 +388,12 @@ PARSERS = {
 }
 
 
-def _build_command(tool: StaticTool, paths: list[str], config: str | None) -> tuple[list[str] | None, str | None, Path]:
+def _build_command(
+    tool: StaticTool,
+    paths: list[str],
+    config: str | None,
+    json_out: Path | None = None,
+) -> tuple[list[str] | None, str | None, Path]:
     if tool.requires_config and not config:
         return None, "tool requires --semgrep-config (local rules); refusing to fetch rules implicitly", Path(".")
     target_paths = [str(Path(p).resolve()) for p in paths]
@@ -369,6 +408,8 @@ def _build_command(tool: StaticTool, paths: list[str], config: str | None) -> tu
             args.extend(target_paths)
         elif arg == "{config}":
             args.append(config or "")
+        elif arg == "{json_out}":
+            args.append(str(json_out) if json_out is not None else "-")
         elif "{addresses}" in arg:
             return None, "tool requires named addresses; configure the workspace manually", Path(".")
         else:
@@ -420,7 +461,12 @@ def targeted_static_sweep(ctx: ToolContext, inp: StaticSweepInput) -> StaticSwee
             )
             continue
 
-        command, reason, cwd = _build_command(static_tool, paths, inp.semgrep_config)
+        json_out = None
+        if "{json_out}" in static_tool.args:
+            sweep_dir = ctx.state.apex_dir / "sweep"
+            sweep_dir.mkdir(parents=True, exist_ok=True)
+            json_out = sweep_dir / f"{static_tool.name}-{index}.json"
+        command, reason, cwd = _build_command(static_tool, paths, inp.semgrep_config, json_out=json_out)
         if command is None:
             runs.append(ToolRun(tool=static_tool.name, status="skipped", reason=reason))
             continue
@@ -431,12 +477,16 @@ def targeted_static_sweep(ctx: ToolContext, inp: StaticSweepInput) -> StaticSwee
 
         result = run_command(command, cwd=cwd, timeout_seconds=inp.timeout_seconds)
         log_path = _write_log(ctx, static_tool.name, index, result.stdout, result.stderr)
-        status = "ran" if not result.timed_out and result.returncode in (0, 1) else "error"
+        ran_codes = SLITHER_RAN_CODES if static_tool.name == "slither" else {0, 1}
+        status = "ran" if not result.timed_out and result.returncode in ran_codes else "error"
         if result.timed_out:
             status = "timeout"
 
         parser = PARSERS.get(static_tool.name)
-        raw_findings = parser(result.stdout, ctx, inp.max_findings) if parser else []
+        payload = result.stdout
+        if json_out is not None and json_out.exists() and json_out.stat().st_size > 0:
+            payload = read_text(json_out, max_bytes=50_000_000)
+        raw_findings = parser(payload, ctx, inp.max_findings) if parser else []
         for finding in raw_findings:
             severity = str(finding.get("severity", "low")).lower()
             confidence = Confidence.HIGH if severity in {"critical", "high", "error"} else Confidence.MEDIUM

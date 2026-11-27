@@ -29,7 +29,7 @@ from schemas.phase2 import (
     StateVocabInput,
     StateVocabOutput,
 )
-from tools._shared import resolve_files, source_exts
+from tools._shared import entry_token, resolve_files, source_exts
 from validation import VAR_RE, validate_cite
 
 
@@ -201,10 +201,13 @@ def make_blind_skeleton(ctx: ToolContext, inp: SkeletonInput) -> SkeletonOutput:
     files = resolve_files(ctx, paths, exts=source_exts(), max_files=3000)
     hits, method, _ = ctx.adapter.surfaces(files, ctx.workspace, max_surfaces=inp.max_surfaces)
 
-    entry = str(flow.get("entry", "")).lower().split("(")[0].split()[-1].split(".")[-1]
-    selected = [h for h in hits if entry and (entry in h.name.lower() or h.name.lower() in entry)]
-    if not selected:
-        selected = hits
+    token = entry_token(str(flow.get("entry", ""))).lower()
+    selected = [
+        h for h in hits
+        if token and (h.name.lower() == token or h.name.lower().endswith("." + token))
+    ]
+    # Do not fall back to the first N alphabetical surfaces (that used to start
+    # every Plether skeleton at out-of-scope CfdClosePreview.sol).
     signatures = [
         Signature(file=h.file, line=h.line, name=h.name, language=h.language)
         for h in selected[: inp.max_surfaces]
@@ -232,7 +235,10 @@ def make_blind_skeleton(ctx: ToolContext, inp: SkeletonInput) -> SkeletonOutput:
         flow_id=inp.flow_id,
         skeleton_path=rel_to(skeleton_path, ctx.workspace),
         signatures=signatures,
-        note=f"Skeleton from {method}; {len(signatures)} signature(s). Bodies omitted.",
+        note=(
+            f"Skeleton from {method}; {len(signatures)} signature(s) matching `{token or '∅'}`. Bodies omitted."
+            + ("" if signatures else " Matcher returned no hits; do not substitute unrelated surfaces.")
+        ),
     )
 
 

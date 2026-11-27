@@ -23,7 +23,7 @@ ADAPTER = Adapter(
         StaticTool(
             name="slither",
             binary="slither",
-            args=("{paths}", "--json", "-"),
+            args=("{paths}", "--json", "{json_out}"),
             single_target=True,
         ),
         StaticTool(

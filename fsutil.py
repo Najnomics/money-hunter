@@ -113,7 +113,8 @@ def is_binary(path: Path, sample: int = 8192) -> bool:
 
 def read_text(path: Path, max_bytes: int = 2_000_000) -> str:
     try:
-        raw = path.read_bytes()[:max_bytes]
+        data = path.read_bytes()
+        raw = data if max_bytes <= 0 else data[:max_bytes]
     except OSError:
         return ""
     if b"\x00" in raw[:8192]:

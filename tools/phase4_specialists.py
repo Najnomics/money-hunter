@@ -145,7 +145,14 @@ def _resolve_scan_files(ctx: ToolContext, divergence: dict, explicit: list[str])
 def dimensional_checker(ctx: ToolContext, inp: DimensionalInput) -> HypothesisBatch:
     divergence = require_divergence(ctx, inp.divergence_id)
     files = _resolve_scan_files(ctx, divergence, inp.files)
-    hits = scan_files(files, ctx.workspace, DIMENSIONAL_PATTERNS, limit=40)
+    hits = scan_files(
+        files,
+        ctx.workspace,
+        DIMENSIONAL_PATTERNS,
+        limit=40,
+        prefer_file=str(divergence.get("file") or "") or None,
+        prefer_line=int(divergence["line"]) if divergence.get("line") else None,
+    )
     sink = _flow_sink(ctx, divergence)
     focus = inp.focus or f"{divergence.get('expected')} vs {divergence.get('observed')}"
     if hits:
@@ -240,7 +247,14 @@ def reverse_engineer_tool(ctx: ToolContext, inp: ReverseInput) -> HypothesisBatc
 def state_machine_breaker(ctx: ToolContext, inp: StateMachineInput) -> HypothesisBatch:
     divergence = require_divergence(ctx, inp.divergence_id)
     files = _resolve_scan_files(ctx, divergence, inp.files)
-    hits = scan_files(files, ctx.workspace, STATE_PATTERNS, limit=40)
+    hits = scan_files(
+        files,
+        ctx.workspace,
+        STATE_PATTERNS,
+        limit=40,
+        prefer_file=str(divergence.get("file") or "") or None,
+        prefer_line=int(divergence["line"]) if divergence.get("line") else None,
+    )
     sink = _flow_sink(ctx, divergence)
     states = ", ".join(inp.target_states[:6]) or "the modelled states"
     if hits:
@@ -276,7 +290,14 @@ def state_machine_breaker(ctx: ToolContext, inp: StateMachineInput) -> Hypothesi
 def trust_boundary_prober(ctx: ToolContext, inp: TrustBoundaryInput) -> HypothesisBatch:
     divergence = require_divergence(ctx, inp.divergence_id)
     files = _resolve_scan_files(ctx, divergence, inp.files)
-    hits = scan_files(files, ctx.workspace, TRUST_PATTERNS, limit=40)
+    hits = scan_files(
+        files,
+        ctx.workspace,
+        TRUST_PATTERNS,
+        limit=40,
+        prefer_file=str(divergence.get("file") or "") or None,
+        prefer_line=int(divergence["line"]) if divergence.get("line") else None,
+    )
     sink = _flow_sink(ctx, divergence)
     boundary = ", ".join(inp.boundaries[:5]) or str(divergence.get("expected"))
     if hits:

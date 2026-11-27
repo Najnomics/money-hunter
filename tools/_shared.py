@@ -85,6 +85,8 @@ def scan_files(
     patterns: Sequence[tuple[str, re.Pattern[str]]],
     limit: int = 100,
     context: int = 0,
+    prefer_file: str | None = None,
+    prefer_line: int | None = None,
 ) -> list[dict]:
     hits: list[dict] = []
     for path in files:
@@ -109,13 +111,30 @@ def scan_files(
                         }
                     )
                     break
-            if len(hits) >= limit:
+            if len(hits) >= limit and prefer_line is None:
                 return hits
+    if prefer_file or prefer_line:
+        def _rank(hit: dict) -> tuple[int, int]:
+            file_miss = 0
+            if prefer_file:
+                needle = prefer_file.replace("\\", "/").lower()
+                file_miss = 0 if needle in hit["file"].replace("\\", "/").lower() else 1
+            dist = abs(int(hit["line"]) - prefer_line) if prefer_line is not None else 0
+            return (file_miss, dist)
+        hits.sort(key=_rank)
+        hits = hits[:limit]
+    elif len(hits) > limit:
+        hits = hits[:limit]
     return hits
 
 
 def entry_token(entry: str) -> str:
-    """Reduce ``Contract.func(args)`` / ``GET /path`` to a comparable token."""
+    """Reduce ``Contract.func(args)`` / ``GET /path`` to the function or route name.
+
+    Types in parentheses are stripped first, so
+    ``MarginClearinghouse.depositFor(address,uint256)`` becomes ``depositFor``,
+    never ``uint256``.
+    """
     entry = entry.strip()
     if " " in entry and entry.split(" ", 1)[0].isupper():
         entry = entry.split(" ", 1)[1]

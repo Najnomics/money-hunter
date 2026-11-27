@@ -118,7 +118,11 @@ global server can serve many targets; each target keeps its own `.apex/`.
 1. `ingest_docs` reads intent. Capture every must/should/never/always claim and
    every TODO/unspecified marker. Do not read implementation source yet.
 2. `review_past_audits` builds the dedupe index. Known issues are hard
-   exclusions; acknowledged-won't-fix is not a finding.
+   exclusions **only when the program page says they are out of scope**.
+   A documented limitation that still has in-scope impact (for example a
+   config-hash change that pays bounties, or a freeze the owner must
+   clear) stays a live Gate 1 lead until an executed test refutes it.
+   Do not kill a lead solely because SECURITY.md mentions the mechanism.
 3. `check_intel` queries the local `bugbounty-intel` corpus. Translate matches
    into target-specific probes.
 4. Optional extension: `cves_intel` (network off by default). Only enable
@@ -274,6 +278,34 @@ TOOLS = [ToolSpec(...)]
 The registry auto-discovers it on the next invocation. A plugin must declare
 its phase, input/output Pydantic models, and write mode. The phase gate and
 schema validation apply automatically.
+
+## Contest recall (required hunter families)
+
+When the target is a vault, pool, or delayed-order protocol, generate explicit
+leads for each family below even if a nearby hypothesis already died at Gate 1.
+A kill of a *different* root cause is not coverage.
+
+1. **Refundable receipts in share price.** Cash that an open position can
+   reclaim (VPI, rebates, clamps) must not be Junior/Senior NAV. Probe both
+   the charge-as-revenue and rebate-as-loss signs, and pending orders whose
+   fill is already pinned.
+2. **Delayed-order optionality after the price is public.** addMargin,
+   withdraw, liquidation cleanup, owner recap, execution-window length, and
+   queued increase-vs-close admission. “No user cancel” does not cover these.
+3. **Share-supply overflow / virtual-offset freeze.** Near-`uint256.max`
+   mints, fee-share headroom, `VIRTUAL_SHARES` addition, quote overflow
+   that reverts `settleLpEpoch`.
+4. **Recapitalization / high-water-mark / unassignedAssets.** Repeated
+   reconcile, residual intent, Senior-gap-first booking, wiped-tranche
+   bootstrap mint (`assignUnassignedAssets` at zero NAV).
+5. **Oracle watermarks and calendar.** Rotation resetting per-feed times,
+   first post-commit tick at macro releases, holiday overrides vs
+   `fadMaxStaleness`, batch cache keyed to newest component time.
+6. **False degradedMode latch.** Hedged pairs, admission counting marked
+   gains as backing, and who is frozen (LP settlement vs trader surplus).
+
+If `make_blind_skeleton` returns no matching signatures, do **not** predict
+from unrelated files. Record ISS-* and fix the matcher.
 
 ## Anti-patterns (hard rejections)
 
