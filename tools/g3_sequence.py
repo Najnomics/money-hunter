@@ -127,7 +127,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="oracle_price_move",
-        when_fn=_re(r"executeClose|executeOrder|executeOpen"),
+        when_fn=_re(r"executeClose|executeOrder"),
         when_var=_re(r"degradedMode|acceptedBasket|minPublishTime|sharePrice"),
         when_family=frozenset({"false-emergency-mode", "oracle-staleness-calendar-watermark"}),
         setup="_publish(1.5e8);",

@@ -98,6 +98,7 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertNotIn("multi_actor_hedge", chosen)
         src = setup_block("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("_thinPool();", src)
+        self.assertNotIn("_publish(1.5e8)", src)
         self.assertNotIn("_thinPoolTo(10_000e6)", src)
         self.assertNotIn("_openFilled(VICTIM", src)
 
