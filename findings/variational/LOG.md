@@ -1,39 +1,39 @@
 # Variational campaign log
 
-Never submit. Never live-test omni.variational.io or Arbitrum. Four gates. Pin is **deployed addresses**.
+Never submit. Never live-test omni.variational.io or send Arbitrum txs. Four gates. Pin is **deployed addresses**.
 
-## Pin
+## Pin (re-checked 2026-11-27 G3)
 
 | Item | Value |
 |---|---|
-| Core OLP Vault | `0x74bbbb0e7f0bad6938509dd4b556a39a4db1f2cd` |
-| Protocol Treasury | `0x5e91b40467fb8902c46a7b6cb90482363188d645` |
-| Settlement Pool Factory | `0x0F820B9afC270d658a9fD7D16B1Bdc45b70f074C` |
-| SDK (not the on-chain pin) | `ce3bf96171b23dd9095354be530150c2b079917f` |
-| Sourcify vault | 404 |
-| Public Solidity repo | none found in variational-research |
+| Core OLP Vault | `0x74bBBb0E7F0bAd6938509Dd4B556a39A4Db1F2Cd` — **codesize 0**, ~73.37M USDC |
+| Protocol Treasury | `0x5E91B40467fB8902c46a7b6Cb90482363188D645` — **codesize 0**, ~14.41M USDC |
+| Settlement Pool Factory | `0x0F820B9afC270d658a9fD7D16B1Bdc45b70f074C` — Sourcify exact_match, `SettlementPoolFactory` |
+| Oracle (docs) | `0x84BE56470d45b7f6629A66A219a38681F6BA6172` — Sourcify exact_match |
+| SDK | `ce3bf96171b23dd9095354be530150c2b079917f` |
 
 ## Passes
 
-| Pass | Method | Surfaces |
+| Pass | Method | G3 |
 |---|---|---|
-| 1 | Money Hunter `strict` on archived Python SDK | 5 DIV, 1 H-* disproved, 0 verified |
-| 2 | Boss-skill SDK auth/permit/rounding | `auth.py` HMAC+timestamp; `permit.py` EIP-712; `rounding.py` HALF_UP |
-| 3 | On-chain pin / docs quoting | Three Immunefi contracts + Omni URL + PoI; no bytecode source; live G3 forbidden |
+| 1 | Sourcify + fork `eth_getCode` / USDC `balanceOf` | vault/treasury EOA; factory verified |
+| 2 | Fork forge tests on factory | unprivileged `createPool` reverts |
+| 3 | Local HMAC + verified pool `onlyOracle` withdraw | HMAC bound; withdraws oracle-gated |
 
 ## Leads
 
 | ID | Claim | Gate | Disposition |
 |---|---|---|---|
-| L-VAULT-SRC | Theft from OLP vault | G3 not possible | No published implementation; Sourcify 404; Foundry/cast missing; live fork of mainnet txs forbidden. Not a finding. |
-| L-HMAC | Forge API HMAC | G1 kill / G4 DP-0001 | MAC includes `key\|timestamp\|method\|path\|body`. Forgery needs secret. Replay window needs live API (forbidden). |
-| L-PERMIT | Unlimited permit drain | G1 kill | `sign_and_submit_unlimited` is an explicit helper; user supplies key. Not unprivileged theft. |
-| L-ROUND | Client rounding extracts OLP | G1 kill | Client-side `ROUND_HALF_UP` only; server quoting is the in-scope economic logic and was not live-tested. |
-| L-WEB | XSS/subdomain on omni | G1 kill | Live website testing against production is prohibited. Theoretical web OOS. |
-| L-ORACLE | Docs oracle address | G1 | Not on Immunefi assets table unless Crit theft via PoI; no source. |
+| L-VAULT-SRC | Theft from OLP vault contract | G3 kill | Vault has no bytecode. Fork `test_olp_vault_and_treasury_have_no_code` PASS. Funds in EOA. |
+| L-FACTORY | Unprivileged `createPool` / fee `transferFrom` | G3 kill | Reverts unless owner/oracle. Fork PASS. |
+| L-POOL-WD | Unprivileged pool USDC withdraw | G1/G3 kill | `withdrawUSDC` / `withdrawFees` `onlyOracle` on verified source. |
+| L-HMAC | Forge API HMAC | G3 kill | Local test: timestamp+body bound; wrong secret differs. Live API forbidden. |
+| L-PERMIT | Unlimited permit drain | G1 kill | Helper; user supplies key. |
+| L-ROUND | Client rounding extracts OLP | G1 kill | Client-side only. |
+| L-WEB | XSS on omni | G1 kill | Live website testing prohibited. |
 
 **Verified findings: 0. No FINDING-*.md.**
 
-## Strongest dropped lead
+## Strongest dropped lead (executed)
 
-**L-VAULT-SRC / quoting-economic Crit:** the program’s highest-paid impact is OLP/treasury extraction, but the in-scope contracts have no public source and G3 on a mainnet fork was not available without live-network tooling. That is an incomplete hunt on the vault bytecode, not a claim the vault is clean.
+**L-VAULT-SRC:** Immunefi names a Core OLP Vault address. Fork shows it is an **EOA** with large USDC, not a Solidity vault. There is no unprivileged contract entrypoint to test. Factory/pool (verified) keep `createPool` and withdrawals behind owner/oracle.

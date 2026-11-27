@@ -4,12 +4,10 @@
 
 | Field | Result |
 |---|---|
-| Pin | Arbitrum `0x74bbbb…f2cd` (OLP), `0x5e91b4…d645` (treasury), `0x0F820B…074C` (factory). SDK HEAD `ce3bf961` is **not** the contract pin. |
-| Harness | `bin/money-hunter` `strict` + four gates |
-| Passes | 3 (SDK pipeline; HMAC/permit/rounding; deployed-address/docs without live testing) |
-| In-scope list | All Immunefi table rows covered at pin/docs level. Vault/treasury/factory **bytecode not sourced**. Omni not live-tested. |
+| Pin | Arbitrum addresses in `PIN.md`; factory Sourcify exact-match 2025-08-27; SDK `ce3bf961` |
+| Harness | four gates; G3 **executed on a local Arbitrum fork** (no live txs) |
+| Passes run | **3 executed** — (1) Sourcify + fork codesize/USDC; (2) factory `createPool` fork revert + verified pool `onlyOracle` withdraw; (3) local HMAC unit test |
 | **Verified count** | **0** |
 | Titles / severities | none |
-| Strongest dropped lead | OLP vault theft / quoting logic — blocked before G3 by missing public source and no-live-test rule |
+| Strongest dropped lead | L-VAULT-SRC: Immunefi “Core OLP Vault” has **no code** (EOA holding ~73M USDC). Fork test `test_olp_vault_and_treasury_have_no_code` **PASS**. Not a contract theft RC; custody of the EOA is out of unprivileged SC scope. |
 | FINDING files | none |
-| Apex (SDK workspace) | 5 DIV, 1 H-* disproved, 0 verified |
