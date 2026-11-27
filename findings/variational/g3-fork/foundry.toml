@@ -1,0 +1,12 @@
+[profile.default]
+src = "."
+test = "."
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.28"
+evm_version = "cancun"
+fs_permissions = []
+remappings = ["forge-std/=lib/forge-std/src/"]
+
+[rpc_endpoints]
+arbitrum = "https://arb1.arbitrum.io/rpc"
