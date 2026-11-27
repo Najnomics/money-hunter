@@ -10,14 +10,17 @@ import re
 from pathlib import Path
 from typing import Iterable
 
-from fsutil import read_text, walk_files
+from fsutil import read_text, rel_to, walk_files, write_text_atomic
 from runtime import ToolContext
 from schemas.common import Confidence
 from schemas.phase3 import Divergence
 from schemas.phase4 import Hypothesis
+from schemas.phase5 import Experiment
 from tools._shared import existing_ids, next_id, require_divergence, source_exts
+from tools.gate_policy import distinguishing_scaffold
 from tools.phase3_divergence import GETTER_OR_MODIFIER, SINK_WORDS, VIEWISH_SETTLEMENT
 from tools.protocol_families import PROTOCOL_FAMILIES, ProtocolFamily, families_for_battery
+from tools.scope_map import evidence_for_mapping, map_excerpt_to_surfaces
 
 VALUE_BEARING_RE = re.compile(
     r"(asset|share|balance|supply|reserve|nav|principal|claim|bounty|margin|"
@@ -36,6 +39,12 @@ SKIP_FNS = {
 }
 FAMILY_MARK = "family:"
 PAIR_MARK = "pair:"
+CONSTANT_RE = re.compile(r"^[A-Z][A-Z0-9_]+$")
+HIGH_EV_MUTATOR_RE = re.compile(
+    r"(deposit|redeem|mint|burn|withdraw|execute|settle|liquidat|harvest|"
+    r"claim|stake|unstake|borrow|repay|addMargin|close|cancel|fill)",
+    re.I,
+)
 
 
 def family_ids_in_hypotheses(hypotheses: Iterable[dict]) -> set[str]:
@@ -63,6 +72,7 @@ def _hyp_blob(hyp: dict | Hypothesis) -> str:
         " ".join(str(x) for x in data.get("evidence") or []),
         " ".join(str(x) for x in data.get("preconditions") or []),
         str(data.get("family") or ""),
+        str(data.get("variant") or ""),
     ]
     return " ".join(parts).lower()
 
@@ -125,6 +135,7 @@ def _make_hypothesis(
     evidence: list[str],
     family: str | None = None,
     title: str | None = None,
+    variant: str | None = None,
     confidence: Confidence = Confidence.LOW,
 ) -> Hypothesis:
     new_id = next_id(reserved | existing_ids(ctx, 4), "H")
@@ -146,13 +157,15 @@ def _make_hypothesis(
             "The attacker controls the inputs identified in the prediction.",
         ],
         experiment_plan=(
-            "Provision the profile sandbox (Phase 5), encode the prediction as an "
-            "invariant test, run it, and capture stdout/stderr under .apex/experiments/."
+            "Provision the profile sandbox (Phase 5) and run a distinguishing attack "
+            "PoC (attacker path, adversarial ordering, first-tick/zero-state). "
+            "A happy-path round-trip or a code-fact read is not Gate 3 evidence."
         ),
         confidence=confidence,
         status="open",
         evidence=marks,
         family=family,
+        variant=variant,
     )
 
 
@@ -234,6 +247,7 @@ def hypotheses_from_intel(
         family = _family_for_text(f"{title} {snippet}")
         if family and family.id in present:
             continue
+        mapped = map_excerpt_to_surfaces(ctx, title, snippet)
         statement = (
             f"Disclosed technique `{title}` ({path}) may apply to this target: {snippet[:280]}"
         )
@@ -252,9 +266,11 @@ def hypotheses_from_intel(
             evidence=[
                 f"[SEARCHED] intel {path}",
                 snippet[:300] or title,
+                *evidence_for_mapping(mapped),
             ],
             family=family.id if family else None,
             title=title[:200],
+            variant=str(mapped[0].get("name")) if mapped else None,
         )
         out.append(hyp)
         blob_existing += " " + _hyp_blob(hyp)
@@ -287,6 +303,7 @@ def hypotheses_from_audits(
         if token.lower() in blob_existing:
             continue
         family = _family_for_text(f"{title} {excerpt}")
+        mapped = map_excerpt_to_surfaces(ctx, title, excerpt)
         statement = (
             f"Past audit finding `{title}` at {source} describes a class that may still "
             f"exist here. Excerpt: {excerpt[:240] or title}"
@@ -308,9 +325,11 @@ def hypotheses_from_audits(
                 f"[SEARCHED] past audit {source}",
                 f"audit:{finding.get('dedupe_key') or title}",
                 excerpt[:300] or title,
+                *evidence_for_mapping(mapped),
             ],
             family=family.id if family else None,
             title=title[:200],
+            variant=str(mapped[0].get("name")) if mapped else None,
         )
         out.append(hyp)
         blob_existing += " " + _hyp_blob(hyp)
@@ -329,6 +348,24 @@ def _family_for_text(text: str) -> ProtocolFamily | None:
     return best[1] if best else None
 
 
+def is_public_mutator(surface: dict) -> bool:
+    """Public/external state-changing functions only. Drop `_` internals and ALL_CAPS constants."""
+    name = str(surface.get("name") or "")
+    if not name or name.lower() in SKIP_FNS:
+        return False
+    if name.startswith("_") or CONSTANT_RE.match(name):
+        return False
+    kind = str(surface.get("kind") or "function")
+    if kind not in {"function", "method", "entrypoint", "route"}:
+        return False
+    if GETTER_OR_MODIFIER.search(name) or VIEWISH_SETTLEMENT.search(name):
+        return False
+    entry = surface.get("entry")
+    if entry is False and not SINK_WORDS.search(name) and not HIGH_EV_MUTATOR_RE.search(name):
+        return False
+    return True
+
+
 def list_mutators(ctx: ToolContext) -> list[dict]:
     ast_map = ctx.state.section(3, "ast_map") or {}
     surfaces = ast_map.get("surfaces") or []
@@ -336,24 +373,12 @@ def list_mutators(ctx: ToolContext) -> list[dict]:
     seen: set[str] = set()
     for surface in surfaces:
         name = str(surface.get("name") or "")
-        if not name or name.lower() in SKIP_FNS:
+        if not is_public_mutator(surface):
             continue
-        kind = str(surface.get("kind") or "function")
-        if kind not in {"function", "method", "entrypoint", "route"}:
+        key = name.lower()
+        if key in seen:
             continue
-        if GETTER_OR_MODIFIER.search(name) or VIEWISH_SETTLEMENT.search(name):
-            continue
-        entry = bool(surface.get("entry"))
-        if not entry and not SINK_WORDS.search(name):
-            # Keep non-entry mutators that don't look like views: default include
-            # if the surface is marked entry, otherwise still include functions
-            # that are not getters.
-            if kind not in {"function", "method"}:
-                continue
-        key = name
-        if key.lower() in seen:
-            continue
-        seen.add(key.lower())
+        seen.add(key)
         mutators.append(surface)
     return mutators
 
@@ -430,12 +455,18 @@ def enumerate_pairs(ctx: ToolContext) -> list[tuple[str, str, dict]]:
 
 def _pair_rank(function: str, var: str) -> int:
     score = 0
+    if HIGH_EV_MUTATOR_RE.search(function):
+        score += 8
     if SINK_WORDS.search(function):
         score += 5
     if VALUE_BEARING_RE.search(function):
         score += 2
     if VALUE_BEARING_RE.search(var):
         score += 3
+    if re.search(r"(sharePrice|totalSupply|nav|hwm|watermark|collateral|margin)", var, re.I):
+        score += 4
+    if function.startswith("_"):
+        score -= 50
     return score
 
 
@@ -487,6 +518,86 @@ def hypotheses_for_uncovered_pairs(
                 sink=var,
                 evidence=evidence,
                 title=f"{fn} x {var}",
+                variant=f"{fn}::{var}",
             )
         )
     return out
+
+
+def queue_distinguishing_g3(
+    ctx: ToolContext,
+    *,
+    max_queue: int = 8,
+    pairs: list[tuple[str, str, dict]] | None = None,
+    hypotheses: Iterable[dict | Hypothesis] | None = None,
+    tool: str = "never_generated_check",
+) -> list[dict]:
+    """Materialize the top-N ranked public mutator × sink pairs as distinguishing G3 tests."""
+    pairs = list(pairs if pairs is not None else enumerate_pairs(ctx))
+    hyps = list(hypotheses if hypotheses is not None else ctx.state.hypotheses())
+    existing_exps = ctx.state.collect(5, "experiments") if hasattr(ctx.state, "collect") else []
+    already: set[str] = set()
+    for exp in existing_exps:
+        obs = str(exp.get("observation") or "")
+        for mark in re.findall(rf"{re.escape(PAIR_MARK)}([A-Za-z_]\w*::[A-Za-z_]\w*)", obs):
+            already.add(mark.lower())
+        art = str(exp.get("artifact") or "")
+        already.add(art.lower())
+
+    queued: list[dict] = []
+    items: list[dict] = []
+    reserved: set[str] = set(existing_ids(ctx, 5))
+    for fn, var, surface in pairs:
+        if len(queued) >= max_queue:
+            break
+        token = f"{fn}::{var}"
+        if token.lower() in already:
+            continue
+        hyp_id = ""
+        for hyp in hyps:
+            if hyp_touches_pair(hyp, fn, var):
+                data = hyp.model_dump() if isinstance(hyp, Hypothesis) else hyp
+                hyp_id = str(data.get("id") or "")
+                break
+        if not hyp_id:
+            continue
+        experiment_id = next_id(reserved, "E")
+        reserved.add(experiment_id)
+        directory = ctx.state.apex_dir / "experiments" / f"g3-{experiment_id.lower()}"
+        directory.mkdir(parents=True, exist_ok=True)
+        test_path = directory / "test_attack.py"
+        write_text_atomic(test_path, distinguishing_scaffold(fn, var, hyp_id))
+        artifact = rel_to(test_path, ctx.workspace)
+        rank = _pair_rank(fn, var)
+        observation = (
+            f"{PAIR_MARK}{token} queued distinguishing G3 attack on `{fn}` × `{var}` "
+            "(attacker path / adversarial ordering / first-tick). Not executed."
+        )
+        experiment = Experiment(
+            id=experiment_id,
+            hypothesis_id=hyp_id,
+            kind="distinguishing_g3",
+            status="prepared",
+            artifact=artifact,
+            observation=observation,
+            verdict="pending",
+            experiment_class="distinguishing",
+        )
+        items.append(experiment.model_dump(mode="json"))
+        queued.append(
+            {
+                "function": fn,
+                "var": var,
+                "file": str(surface.get("file") or ""),
+                "line": int(surface.get("line") or 0),
+                "rank": rank,
+                "hypothesis_id": hyp_id,
+                "experiment_id": experiment_id,
+                "experiment_class": "distinguishing",
+                "test_plan": observation,
+            }
+        )
+        already.add(token.lower())
+    if items:
+        ctx.state.append_items(5, "experiments", items, tool)
+    return queued

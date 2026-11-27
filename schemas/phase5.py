@@ -36,6 +36,10 @@ class Experiment(ApexModel):
     stderr_path: Optional[str] = None
     observation: str = ""
     verdict: str = "pending"
+    experiment_class: str = Field(
+        "unknown",
+        description="distinguishing | happy-path | code-fact | unknown. Only distinguishing can confirm or refute.",
+    )
 
 
 class ExperimentBatch(ApexModel):
@@ -50,6 +54,10 @@ class InvariantTestInput(ApexModel):
     execute: bool = Field(False, description="Actually run the command. Default false (dry-run).")
     timeout_seconds: int = Field(120, ge=5, le=3600)
     name: str = "invariant_test"
+    experiment_class: str = Field(
+        "distinguishing",
+        description="Must be distinguishing for a G3 pass/kill. Happy-path and code-fact are not evidence.",
+    )
 
 
 class RecordExperimentInput(ApexModel):
@@ -58,3 +66,15 @@ class RecordExperimentInput(ApexModel):
     observation: str = ""
     verdict: str = "pending"
     output_path: Optional[str] = None
+    experiment_class: str = Field(
+        "",
+        description="distinguishing | happy-path | code-fact | unknown. Confirmed/refuted require distinguishing.",
+    )
+
+
+class CartesianQueueInput(ApexModel):
+    max_queue: int = Field(8, ge=1, le=50, description="How many top-ranked public pairs to materialize.")
+    execute: bool = Field(
+        False,
+        description="Queue never executes. Distinguishing attacks are recorded separately.",
+    )

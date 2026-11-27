@@ -42,6 +42,7 @@ from tools.hypothesis_seed import (
     hypotheses_from_audits,
     hypotheses_from_families,
     hypotheses_from_intel,
+    queue_distinguishing_g3,
 )
 from tools.protocol_families import families_for_battery
 from validation import fact_ok, validate_cite
@@ -587,8 +588,9 @@ def never_generated_check(ctx: ToolContext, inp: NeverGeneratedInput) -> Hypothe
     )
     leftover = uncovered[len(generated):]
     notes = [
-        f"Enumerated {len(pairs)} mutator × value-var pair(s); {len(covered)} already touched; "
-        f"generated {len(generated)}; {len(leftover)} still uncovered."
+        f"Enumerated {len(pairs)} public/external mutator × value-var pair(s); "
+        f"{len(covered)} already touched; generated {len(generated)}; {len(leftover)} still uncovered. "
+        "Internal `_` functions and ALL_CAPS constants are dropped from the cartesian."
     ]
     if not pairs:
         notes.append(
@@ -599,6 +601,19 @@ def never_generated_check(ctx: ToolContext, inp: NeverGeneratedInput) -> Hypothe
             f"{len(leftover)} pair(s) remain; rerun never_generated_check to continue. "
             "Coverage treats leftover pairs as high-EV gaps."
         )
+    g3_queue: list[dict] = []
+    if inp.queue_g3:
+        known = list(existing) + [h.model_dump() for h in generated]
+        g3_queue = queue_distinguishing_g3(
+            ctx,
+            max_queue=inp.max_queue,
+            pairs=pairs,
+            hypotheses=known,
+            tool="never_generated_check",
+        )
+        notes.append(
+            f"Queued {len(g3_queue)} distinguishing G3 test(s) from ranked public mutator × value-sink pairs."
+        )
     return HypothesisBatch(
         hypotheses=generated,
         notes=notes,
@@ -607,6 +622,7 @@ def never_generated_check(ctx: ToolContext, inp: NeverGeneratedInput) -> Hypothe
         pairs_covered=len(covered),
         pairs_generated=len(generated),
         uncovered=[f"{fn}::{var}" for fn, var, _ in leftover],
+        g3_queue=g3_queue,
     )
 
 

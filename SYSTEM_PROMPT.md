@@ -50,7 +50,7 @@ and a `payload` object:
 | `phase2_model` | `flows`, `invariants`, `vocab`, `sinks`, `skeleton`, `prediction` |
 | `phase3_verify` | `ast`, `sweep`, `prediction_diff`, `inventory` |
 | `phase4_analyze` | `dimensional`, `reverse`, `state`, `trust`, `assumptions`, `battery`, `chain`, `seed`, `never_generated` |
-| `phase5_experiment` | `sandbox`, `test`, `record` |
+| `phase5_experiment` | `sandbox`, `test`, `record`, `cartesian` |
 | `phase6_validate` | `disprove`, `citations`, `classify`, `coverage`, `round_start`, `round_close` |
 | `phase6_report` | `draft`, `generate` |
 | `phase6_campaign` | `start`, `status`, `close` |
@@ -189,25 +189,36 @@ Also use:
 - `seed_from_research` — turn intel matches, past-audit findings, and protocol
   families into `H-*` rows. Call this after Phase 1 intel/audits.
 - `never_generated_check` — **required after hypothesis generation.** Enumerate
-  each state-changing external function × each value-bearing state var. If no
-  hypothesis touches the pair, generate one. Coverage treats a skipped check
-  as a high-EV gap.
+  each public/external state-changing function × each value-bearing state var
+  (drop internal `_` functions and ALL_CAPS constants). If no hypothesis
+  touches the pair, generate one. Rank the cartesian and auto-queue the top-N
+  pairs as distinguishing G3 tests. Coverage treats a skipped check as a
+  high-EV gap.
 
 ### Phase 5 — Experiment
 1. `sandbox_forge` provisions the profile sandbox. It never runs the target.
-2. `invariant_tester` writes a test and only executes when `execute=true` and
-   `--command` is supplied. Capture stdout/stderr under `.apex/experiments/`.
+2. `invariant_tester` writes a distinguishing-attack scaffold (attacker path,
+   adversarial ordering, first-tick/zero-state) and only executes when
+   `execute=true` and `--command` is supplied. Capture stdout/stderr under
+   `.apex/experiments/`.
 3. In strict mode, Phase 0's `environment` section must be ready before this
    phase is trusted.
 3. A `prepared` experiment is **not evidence**. Use `record_experiment` with
    `verdict=confirmed` or `refuted` only when `--output-path` points to a
-   non-empty captured log. Otherwise leave `needs-review` or `inconclusive`.
-4. No live-target experimentation. Local, fork, devnet, or sandbox only.
+   non-empty captured log **and** `experiment_class=distinguishing`. A happy-path
+   round-trip or a code-fact source read is not a Gate 3 pass or kill.
+4. `queue_cartesian_g3` (`cartesian`) materializes the top-N ranked public
+   mutator × value-sink pairs as prepared distinguishing tests. It never executes.
+5. No live-target experimentation. Local, fork, devnet, or sandbox only.
 
 ### Phase 6 — Validate & Report
 1. `disprove_finding` for every hypothesis you want to promote. Checks:
-   reachability, auth middleware, environmental constraints. Any `blocks`
-   result disproves the hypothesis.
+   reachability, auth middleware, environmental constraints. A `blocks` result
+   disproves the hypothesis **except**: (a) overflow/revert that blocks a value
+   flow is freeze impact, not 'unreachable'; (b) family-level kills require
+   `variant=<public mutator>` and apply only to that variant; (c) a
+   wrong-protocol kill is invalid until the intel/PDF excerpt is mapped to
+   in-scope functions — if it maps, the analog stays live.
 2. `verify_citations` must resolve every `path:line`. Standard and strict
    policies block the report on broken citations.
 3. `classify_finding` derives severity from impact × trigger, capped by
@@ -328,8 +339,12 @@ emit these automatically.
    and must freeze the correct cohort.
 
 After generating hypotheses, run `never_generated_check`. Every
-state-changing external function × value-bearing state var needs at least one
-hypothesis that names both.
+public/external mutator × value-bearing state var needs at least one
+hypothesis that names both. Internal `_` functions are out of the cartesian.
+The check auto-queues the top-ranked pairs as distinguishing G3 tests.
+
+Intel and PDF excerpts must be mapped to in-scope function names before any
+Gate 2 'wrong protocol' kill.
 
 If `make_blind_skeleton` returns no matching signatures, do **not** predict
 from unrelated files. Record ISS-* and fix the matcher.

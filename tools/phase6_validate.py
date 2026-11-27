@@ -44,6 +44,15 @@ from schemas.phase6 import (
     StartRoundInput,
 )
 from tools._shared import existing_ids, next_id, require_hypothesis
+from tools.gate_policy import (
+    family_disprove_scope,
+    freeze_blocks_are_impact,
+    infer_experiment_class,
+    is_wrong_protocol_kill,
+    kills_hypothesis,
+    mapped_surface_names,
+    mapping_attempted,
+)
 from validation import parse_cite, severity_from, validate_cite, validate_cites
 
 DEFAULT_CHECKS = (
@@ -79,17 +88,68 @@ DEFAULT_CHECKS = (
     tags=("validation", "false-positive"),
 )
 def disprove_finding(ctx: ToolContext, inp: DisproveInput) -> DisproofBatch:
-    require_hypothesis(ctx, inp.hypothesis_id)
-    checks = inp.checks or list(DEFAULT_CHECKS)
+    hypothesis = require_hypothesis(ctx, inp.hypothesis_id)
+    checks = list(inp.checks or DEFAULT_CHECKS)
+    extra_notes: list[str] = []
 
-    blocking = [c.name for c in checks if c.result == CheckResult.BLOCKS]
-    allowing = [c.name for c in checks if c.result == CheckResult.ALLOWS]
-    unknown = [c.name for c in checks if c.result == CheckResult.UNKNOWN]
+    effective: list[DisproofCheck] = []
+    for check in checks:
+        if check.result == CheckResult.BLOCKS and freeze_blocks_are_impact(hypothesis, check):
+            extra_notes.append(
+                f"{check.name}: overflow/revert that blocks a value flow is freeze impact, "
+                "not 'unreachable'. Check ignored as a G4 kill."
+            )
+            effective.append(
+                check.model_copy(update={"result": CheckResult.ALLOWS})
+                if hasattr(check, "model_copy")
+                else DisproofCheck(
+                    name=check.name,
+                    question=check.question,
+                    result=CheckResult.ALLOWS,
+                    evidence=check.evidence,
+                )
+            )
+            continue
+        if check.result == CheckResult.BLOCKS and is_wrong_protocol_kill(check):
+            mapped = mapped_surface_names(hypothesis)
+            if not mapping_attempted(hypothesis):
+                extra_notes.append(
+                    f"{check.name}: map the intel/PDF excerpt to in-scope functions before "
+                    "a G2 wrong-protocol kill. Check held as unknown."
+                )
+                effective.append(
+                    DisproofCheck(
+                        name=check.name,
+                        question=check.question,
+                        result=CheckResult.UNKNOWN,
+                        evidence=check.evidence,
+                    )
+                )
+                continue
+            if mapped:
+                extra_notes.append(
+                    f"{check.name}: excerpt maps to in-scope {', '.join(mapped)}; "
+                    "not a wrong-protocol kill."
+                )
+                effective.append(
+                    DisproofCheck(
+                        name=check.name,
+                        question=check.question,
+                        result=CheckResult.ALLOWS,
+                        evidence=check.evidence,
+                    )
+                )
+                continue
+        effective.append(check)
+
+    blocking = [c.name for c in effective if c.result == CheckResult.BLOCKS]
+    allowing = [c.name for c in effective if c.result == CheckResult.ALLOWS]
+    unknown = [c.name for c in effective if c.result == CheckResult.UNKNOWN]
 
     if blocking:
         verdict = "disproved"
         rationale = "At least one check blocks the path: " + ", ".join(blocking)
-    elif checks and not unknown:
+    elif effective and not unknown:
         verdict = "survives"
         rationale = "Every adversarial check allows the path: " + ", ".join(allowing)
     else:
@@ -100,6 +160,13 @@ def disprove_finding(ctx: ToolContext, inp: DisproveInput) -> DisproofBatch:
             else "No checks supplied."
         )
 
+    verdict, scope, scope_notes = family_disprove_scope(hypothesis, inp.variant, verdict)
+    extra_notes.extend(scope_notes)
+    if extra_notes:
+        rationale = rationale + " " + " ".join(extra_notes)
+    if inp.notes:
+        rationale = rationale + f" Notes: {inp.notes}"
+
     disproof = Disproof(
         id=next_id(existing_ids(ctx, 6), "DP"),
         hypothesis_id=inp.hypothesis_id,
@@ -107,9 +174,12 @@ def disprove_finding(ctx: ToolContext, inp: DisproveInput) -> DisproofBatch:
         blocking_checks=blocking,
         allowing_checks=allowing,
         unknown_checks=unknown,
-        rationale=rationale + (f" Notes: {inp.notes}" if inp.notes else ""),
+        rationale=rationale,
+        variant=inp.variant or hypothesis.get("variant"),
+        scope=scope,
     )
-    return DisproofBatch(items=[disproof])
+    notes = extra_notes[:]
+    return DisproofBatch(items=[disproof], notes=notes)
 
 
 @tool(
@@ -227,7 +297,13 @@ def coverage_check(ctx: ToolContext, inp: CoverageInput) -> CoverageOutput:
         if locations:
             covered_flow_ids.add(str(flow_id))
     tested_ids = {str(e.get("hypothesis_id")) for e in experiments if e.get("hypothesis_id")}
-    disproved_ids = {str(d.get("hypothesis_id")) for d in disproofs if d.get("hypothesis_id")}
+    disproof_by_hyp: dict[str, list[dict]] = {}
+    for disproof in disproofs:
+        disproof_by_hyp.setdefault(str(disproof.get("hypothesis_id")), []).append(disproof)
+    disproved_ids = {
+        hid for hid, rows in disproof_by_hyp.items() if any(kills_hypothesis(d) for d in rows)
+    }
+    kill_pass_ids = set(disproof_by_hyp)
     chain_sinks = {str(c.get("sink_id")) for c in chains if c.get("sink_id")}
     hypothesis_sinks = {str(h.get("sink")) for h in hypotheses if h.get("sink")}
 
@@ -308,7 +384,7 @@ def coverage_check(ctx: ToolContext, inp: CoverageInput) -> CoverageOutput:
                     ev_rank=65,
                 )
             )
-        if hypothesis_id not in disproved_ids:
+        if hypothesis_id not in kill_pass_ids:
             gaps.append(
                 GapRef(
                     id=f"GAP-DISPROOF-{hypothesis_id}",
@@ -317,6 +393,20 @@ def coverage_check(ctx: ToolContext, inp: CoverageInput) -> CoverageOutput:
                     next_phase=6,
                     next_tool="disprove_finding",
                     ev_rank=30,
+                )
+            )
+        elif hypothesis.get("family") and hypothesis_id not in disproved_ids:
+            gaps.append(
+                GapRef(
+                    id=f"GAP-VARIANT-{hypothesis_id}",
+                    type="variant",
+                    description=(
+                        f"Family hypothesis {hypothesis_id} has only variant-scoped G4 kills. "
+                        "Remaining public mutators in the family stay live."
+                    ),
+                    next_phase=6,
+                    next_tool="disprove_finding",
+                    ev_rank=70,
                 )
             )
 
@@ -831,10 +921,20 @@ def generate_report(ctx: ToolContext, inp: ReportInput) -> ReportOutput:
 
     def verified(hypothesis: dict) -> bool:
         runs = experiments_by_hyp.get(str(hypothesis.get("id")), [])
-        return any(run.get("status") == "ran" and run.get("verdict") == "confirmed" for run in runs)
+        return any(
+            run.get("status") == "ran"
+            and run.get("verdict") == "confirmed"
+            and infer_experiment_class(
+                declared=str(run.get("experiment_class") or ""),
+                observation=str(run.get("observation") or ""),
+                command=str(run.get("command") or ""),
+            )
+            == "distinguishing"
+            for run in runs
+        )
 
     def disproved(hypothesis: dict) -> bool:
-        return any(d.get("verdict") == "disproved" for d in disproof_by_hyp.get(str(hypothesis.get("id")), []))
+        return any(kills_hypothesis(d) for d in disproof_by_hyp.get(str(hypothesis.get("id")), []))
 
     survivors = [h for h in hypotheses if not disproved(h)]
     verified_findings = [h for h in survivors if verified(h)]

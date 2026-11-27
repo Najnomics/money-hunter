@@ -49,6 +49,10 @@ class Hypothesis(ApexModel):
     trusted_actor: bool = Field(False, description="True if the path needs an admin/keeper/operator action.")
     evidence: list[str] = Field(default_factory=list)
     family: Optional[str] = Field(None, description="Protocol-family id when this hyp was seeded from a catalog.")
+    variant: Optional[str] = Field(
+        None,
+        description="Public mutator or mutator::var this family claim is scoped to. Empty = family-level.",
+    )
 
 
 class HypothesisBatch(ApexModel):
@@ -60,6 +64,10 @@ class HypothesisBatch(ApexModel):
     pairs_covered: int = 0
     pairs_generated: int = 0
     uncovered: list[str] = Field(default_factory=list)
+    g3_queue: list[dict] = Field(
+        default_factory=list,
+        description="Top-N public mutator × value-sink pairs queued as distinguishing G3 tests.",
+    )
 
 
 class Assumption(ApexModel):
@@ -137,6 +145,11 @@ class SeedResearchInput(ApexModel):
 class NeverGeneratedInput(ApexModel):
     divergence_id: Optional[str] = Field(None, description="Optional DIV-* anchor.")
     max_generate: int = Field(200, ge=1, le=2000)
+    queue_g3: bool = Field(
+        True,
+        description="Auto-queue the top-N ranked public mutator × value-sink pairs as distinguishing G3 tests.",
+    )
+    max_queue: int = Field(8, ge=1, le=50)
 
 
 class ChainNode(ApexModel):

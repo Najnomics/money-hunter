@@ -30,6 +30,8 @@ class NeverGeneratedTests(unittest.TestCase):
                         {"file": "src/Vault.sol", "line": 10, "name": "deposit", "kind": "function", "entry": True},
                         {"file": "src/Vault.sol", "line": 40, "name": "redeem", "kind": "function", "entry": True},
                         {"file": "src/Vault.sol", "line": 80, "name": "previewDeposit", "kind": "function", "entry": True},
+                        {"file": "src/Vault.sol", "line": 90, "name": "_syncIndex", "kind": "function", "entry": False},
+                        {"file": "src/Vault.sol", "line": 91, "name": "ENGINE", "kind": "function", "entry": True},
                     ]
                 },
             )
@@ -56,6 +58,8 @@ class NeverGeneratedTests(unittest.TestCase):
                 f"{h.statement} {h.falsifiable_prediction} {' '.join(h.evidence)}" for h in out.hypotheses
             )
             self.assertNotIn("previewDeposit", generated_blob)
+            self.assertNotIn("_syncIndex", generated_blob)
+            self.assertNotIn("ENGINE", generated_blob)
             # deposit x sharePrice already touched.
             for hyp in out.hypotheses:
                 self.assertFalse(hyp_touches_pair(hyp, "deposit", "sharePrice"))

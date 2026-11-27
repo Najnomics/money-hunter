@@ -26,6 +26,10 @@ class DisproveInput(ApexModel):
     hypothesis_id: str = Field(..., description="Required. A valid H-* id from Phase 4.")
     checks: list[DisproofCheck] = Field(default_factory=list)
     notes: Optional[str] = None
+    variant: Optional[str] = Field(
+        None,
+        description="Required to kill a family-level hypothesis. Kill is scoped to this public mutator/pair.",
+    )
 
 
 class Disproof(ApexModel):
@@ -36,6 +40,11 @@ class Disproof(ApexModel):
     allowing_checks: list[str] = Field(default_factory=list)
     unknown_checks: list[str] = Field(default_factory=list)
     rationale: str = ""
+    variant: Optional[str] = None
+    scope: str = Field(
+        "hypothesis",
+        description="hypothesis | variant | family. A variant-scoped kill does not close the family.",
+    )
 
 
 class DisproofBatch(ApexModel):

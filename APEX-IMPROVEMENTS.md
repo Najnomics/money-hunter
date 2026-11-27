@@ -2,7 +2,7 @@
 
 Blind campaign: **0 verified findings**. Official unique paid findings: **63** (18C / 10H / 11M / 24L). Operator “69” is not a published unique-finding total. See `findings/plether-key/CLASSIFICATION.md`.
 
-Root causes ranked by impact on that miss. Items 1–10 are implemented on `cursor/recall-fixes-f6d2` (this branch).
+Root causes ranked by impact on that miss. Items 1–10 are on `cursor/recall-fixes-f6d2`. Items 11–15 (this branch, `cursor/recall-fixes-2-f6d2`) are the top five harness fixes from the blind2 score.
 
 ## Honest caveat (read this before re-running Plether)
 
@@ -84,16 +84,47 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 
 **Cause.** 62/63 unique chiefs were never even hypothesized. Coverage of “we looked at CH” is not coverage of `redeem × sharePrice`.
 
-**Fix (this branch).** After hypothesis generation, `never_generated_check` (also the default tail of `seed`) enumerates each state-changing external function × each value-bearing state var. If no hypothesis mentions both tokens, it generates one. Leftover pairs and a skipped self-check are high-EV coverage gaps.
+**Fix (this branch).** After hypothesis generation, `never_generated_check` (also the default tail of `seed`) enumerates each state-changing external function × each value-bearing state var. If no hypothesis mentions both tokens, it generates one. Leftover pairs and a skipped self-check are high-EV coverage gaps. Item 14 tightens this to public/external mutators and auto-queues G3.
+
+## 11. G4 must not kill overflow/revert as 'unreachable' when the revert blocks a value flow
+
+**Cause.** Blind2 G4 killed the share-supply overflow family because a cap/revert was labelled unreachable. The revert *is* the impact: deposits, redemptions, or settlement freeze (Immunefi F+/F-).
+
+**Fix (this branch).** `disprove_finding` ignores BLOCKS checks that use unreachable language against a freeze/overflow hypothesis. Freeze = impact. Tests in `tests/test_recall_gates.py`.
+
+## 12. G3 must run the distinguishing attack PoC, never the happy path
+
+**Cause.** Gate 3 treated a solvent round-trip, a seeded fixture, or a natspec/code-fact read as a pass or kill. Those do not distinguish the attack from intended behaviour.
+
+**Fix (this branch).** `record_experiment` confirms or refutes only when `experiment_class` (inferred from observation/command/log, not just the label) is `distinguishing`: attacker path, adversarial ordering, first-tick/zero-state. Happy-path and code-fact raise. Unknown class is inconclusive, not a pass/kill. Default invariant scaffolds are distinguishing attacks, not `assert True`.
+
+## 13. Family-level G4 kills apply per variant, not per family
+
+**Cause.** One G4 kill of H-0001 (mint-to-pool analog) or H-0002 (overflow) closed the whole family. Other public mutators in the same family stayed untested.
+
+**Fix (this branch).** Family hypotheses require `variant=<public mutator or pair>` to kill. The verdict is `disproved-variant` (scope=`variant`); the family stays open. Missing variant → `needs-variant`. Coverage emits `GAP-VARIANT-*`. `generate_report` only drops a hyp on a family-wide `disproved`.
+
+## 14. Rank cartesian public/external mutators × value sinks; drop `_` internals; auto-queue top-N G3 tests
+
+**Cause.** The cartesian included `_` helpers and ALL_CAPS immutables, exploding pair count and burying the real ABI. Pairs were hypothesized but never turned into Gate 3 tests.
+
+**Fix (this branch).** `list_mutators` keeps public/external mutators only. Pairs are ranked (deposit/redeem/mint/settle/… × sharePrice/totalSupply/nav/…). `never_generated_check` auto-queues the top-N as prepared distinguishing experiments. Phase 5 action `cartesian` (`queue_cartesian_g3`) re-materializes the queue; it never executes.
+
+## 15. Map intel/PDF excerpts to in-scope functions before any G2 'wrong protocol' kill
+
+**Cause.** Analogs were killed as the wrong protocol without checking whether the write-up named an in-scope function.
+
+**Fix (this branch).** `seed` maps intel/PDF excerpts onto Phase 3 public surfaces (`mapped-surface:Name` + `[CODE] file:line`, or `analog-unmapped`). `disprove_finding` will not take a wrong-protocol BLOCKS until that mapping has run; if it hits an in-scope function, the analog stays live.
 
 ## Tests added
 
 - `tests/test_entry_match.py` — matcher, contract disambiguation, slither rc 255, `--json {json_out}`, detector parse
 - `tests/test_coverage.py` — fail-closed vs mapped critical flow; missing self-check gap
 - `tests/test_intel_pdf.py` — bundled intel, PDF ingest, family seeding, default vault battery (no protocol-specific names)
-- `tests/test_never_generated.py` — cartesian fill, getters skipped, already-covered pairs skipped
+- `tests/test_never_generated.py` — cartesian fill, getters skipped, already-covered pairs skipped, `_` internals and constants dropped
+- `tests/test_recall_gates.py` — freeze-is-impact G4, distinguishing vs happy-path/code-fact G3, per-variant family kills, public cartesian G3 queue, excerpt→in-scope mapping before wrong-protocol kill
 
-## Top 10 (summary)
+## Top 15 (summary)
 
 1. Require protocol-agnostic refundable-receipt / delayed-order / overflow / recap / oracle-calendar / false-emergency families (answer-key-derived; Plether recall is contaminated).
 2. Match `Contract.fn` not ABI types.
@@ -105,3 +136,8 @@ Would have helped known-issue indexing more than 97591 specifically; together wi
 8. Ship an intel corpus and PDF audit ingest that feed `seed`.
 9. Default vault battery: refundable receipts in share price and the sibling families.
 10. Coverage fails closed if critical flows are unmapped.
+11. Overflow/revert that freezes a value flow is not a G4 'unreachable' kill.
+12. Gate 3 requires a distinguishing attack PoC; happy-path and code-fact are not pass/kill.
+13. Family G4 kills are per variant, not per family.
+14. Cartesian is public/external mutators × value sinks; top-N auto-queue as G3 tests.
+15. Map intel/PDF excerpts to in-scope functions before a wrong-protocol kill.

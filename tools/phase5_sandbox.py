@@ -13,6 +13,7 @@ from pathlib import Path
 from fsutil import rel_to, run_command, write_text_atomic
 from runtime import ToolContext, ToolSpec, ToolError, tool
 from schemas.phase5 import (
+    CartesianQueueInput,
     Experiment,
     ExperimentBatch,
     InvariantTestInput,
@@ -21,6 +22,7 @@ from schemas.phase5 import (
     SandboxOutput,
 )
 from tools._shared import existing_ids, next_id, require_hypothesis
+from tools.gate_policy import distinguishing_scaffold, infer_experiment_class
 
 
 def _slug(value: str) -> str:
@@ -71,20 +73,12 @@ def sandbox_forge(ctx: ToolContext, inp: SandboxInput) -> SandboxOutput:
 
 
 def _scaffold(hypothesis: dict) -> str:
-    statement = str(hypothesis.get("statement", "")).strip()
-    prediction = str(hypothesis.get("falsifiable_prediction", "")).strip()
-    return (
-        '"""Auto-generated invariant test scaffold.\n\n'
-        f"Hypothesis: {hypothesis.get('id')}\n"
-        f"{statement}\n\n"
-        f"Prediction: {prediction}\n"
-        '"""\n\n'
-        "import pytest\n\n\n"
-        "def test_invariant_scaffold():\n"
-        "    # TODO: replace with a real property-based test derived from the prediction.\n"
-        "    # Use hypothesis or the profile's native test framework.\n"
-        "    assert True  # placeholder — this is NOT evidence\n"
-    )
+    variant = str(hypothesis.get("variant") or "")
+    fn, var = "", ""
+    if "::" in variant:
+        fn, var = variant.split("::", 1)
+    sink = str(hypothesis.get("sink") or var or "value")
+    return distinguishing_scaffold(fn or "mutator", sink, str(hypothesis.get("id") or ""))
 
 
 @tool(
@@ -104,6 +98,12 @@ def invariant_tester(ctx: ToolContext, inp: InvariantTestInput) -> ExperimentBat
     directory.mkdir(parents=True, exist_ok=True)
 
     test_source = inp.test_code if inp.test_code else _scaffold(hypothesis)
+    declared_class = infer_experiment_class(
+        declared=inp.experiment_class,
+        observation="",
+        command=inp.command or "",
+        test_code=test_source,
+    )
     test_path = directory / "test_invariant.py"
     write_text_atomic(test_path, test_source)
 
@@ -154,10 +154,16 @@ def invariant_tester(ctx: ToolContext, inp: InvariantTestInput) -> ExperimentBat
         stderr_path=stderr_path,
         observation=observation,
         verdict=verdict,
+        experiment_class=declared_class,
     )
     notes = []
     if not inp.execute:
         notes.append("Dry run: pass --execute true with --command to produce evidence.")
+    if declared_class in {"happy-path", "code-fact"}:
+        notes.append(
+            f"experiment_class={declared_class} is not a Gate 3 pass/kill. "
+            "Run the distinguishing attack (attacker path, adversarial ordering, first-tick/zero-state)."
+        )
     return ExperimentBatch(items=[experiment], notes=notes)
 
 
@@ -186,6 +192,34 @@ def record_experiment(ctx: ToolContext, inp: RecordExperimentInput) -> Experimen
                 "confirmed/refuted experiments require a non-empty --output-path with captured evidence."
             )
 
+    test_code = ""
+    if output and output.exists() and output.suffix in {".py", ".sol", ".t.sol", ".rs", ".log", ".txt"}:
+        try:
+            test_code = output.read_text(encoding="utf-8", errors="replace")[:8000]
+        except OSError:
+            test_code = ""
+    klass = infer_experiment_class(
+        declared=inp.experiment_class,
+        observation=inp.observation,
+        command=inp.command,
+        test_code=test_code,
+    )
+    verdict = inp.verdict
+    notes: list[str] = []
+    if verdict in {"confirmed", "refuted"}:
+        if klass in {"happy-path", "code-fact"}:
+            raise ToolError(
+                "Gate 3 must run the distinguishing attack PoC (attacker path, adversarial "
+                "ordering, first-tick/zero-state). A happy-path or code-fact check is not a "
+                f"G3 pass/kill (got {klass})."
+            )
+        if klass != "distinguishing":
+            notes.append(
+                "Gate 3 pass/kill requires a distinguishing attack. "
+                "Recorded as inconclusive: experiment_class is not distinguishing."
+            )
+            verdict = "inconclusive"
+
     artifact = rel_to(output, ctx.workspace) if output and output.exists() else inp.output_path
     experiment = Experiment(
         id=next_id(existing_ids(ctx, 5), "E"),
@@ -196,9 +230,50 @@ def record_experiment(ctx: ToolContext, inp: RecordExperimentInput) -> Experimen
         artifact=artifact,
         stdout_path=artifact,
         observation=inp.observation,
-        verdict=inp.verdict,
+        verdict=verdict,
+        experiment_class=klass,
     )
-    return ExperimentBatch(items=[experiment])
+    return ExperimentBatch(items=[experiment], notes=notes)
 
 
-TOOLS: list[ToolSpec] = [sandbox_forge, invariant_tester, record_experiment]  # type: ignore[list-item]
+@tool(
+    name="queue_cartesian_g3",
+    phase=5,
+    section="experiments",
+    summary="Materialize the top-N ranked public/external mutator × value-sink pairs as distinguishing G3 tests.",
+    input_model=CartesianQueueInput,
+    output_model=ExperimentBatch,
+    write_mode="none",
+    tags=("experiment", "queue"),
+)
+def queue_cartesian_g3(ctx: ToolContext, inp: CartesianQueueInput) -> ExperimentBatch:
+    if inp.execute:
+        raise ToolError(
+            "queue_cartesian_g3 never executes. Record a distinguishing attack with record_experiment."
+        )
+    from tools.hypothesis_seed import queue_distinguishing_g3
+
+    queued = queue_distinguishing_g3(ctx, max_queue=inp.max_queue, tool="queue_cartesian_g3")
+    # Experiments were already appended; return them as a batch without a second write.
+    items = [
+        Experiment(
+            id=str(row.get("experiment_id") or ""),
+            hypothesis_id=str(row.get("hypothesis_id") or ""),
+            kind="distinguishing_g3",
+            status="prepared",
+            observation=str(row.get("test_plan") or ""),
+            verdict="pending",
+            experiment_class="distinguishing",
+        )
+        for row in queued
+    ]
+    notes = [
+        f"Queued {len(items)} distinguishing G3 test(s) from ranked public mutator × value-sink pairs. "
+        "Internal `_` functions are excluded."
+    ]
+    if not items:
+        notes.append("Nothing queued. Run never_generated_check first so pairs have hypotheses.")
+    return ExperimentBatch(items=items, notes=notes)
+
+
+TOOLS: list[ToolSpec] = [sandbox_forge, invariant_tester, record_experiment, queue_cartesian_g3]  # type: ignore[list-item]

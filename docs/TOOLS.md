@@ -12,7 +12,7 @@ The default `core` toolset exposes **10 tools**. Each takes an `action` and a
 | `phase2_model` | flows, invariants, vocab, sinks, skeleton, prediction |
 | `phase3_verify` | ast, sweep, prediction_diff, inventory |
 | `phase4_analyze` | dimensional, reverse, state, trust, assumptions, battery, chain, seed, never_generated |
-| `phase5_experiment` | sandbox, test, record |
+| `phase5_experiment` | sandbox, test, record, cartesian |
 | `phase6_validate` | disprove, citations, classify, coverage, round_start, round_close |
 | `phase6_report` | draft, generate |
 | `phase6_campaign` | start, status, close |
@@ -85,21 +85,22 @@ empty `run_battery` will create a synthetic `DIV-SEED-*` if none exists.
 | `run_battery` | `battery=vault/lifecycle/boundary`, `trigger`, `checks[]`. Empty vault checks load the default share-price families and seed hypotheses. | `batteries` |
 | `chain_hypotheses` | `nodes[]` with pre/post facts, `chains[]` with edges and sink | `chains` |
 | `seed_from_research` | optional `divergence_id`; intel + past audits + families → hypotheses; default `fill_never_generated` | `research_seeds` (+ `gap_fill`) |
-| `never_generated_check` | optional `divergence_id`, `max_generate` | `gap_fill` |
+| `never_generated_check` | optional `divergence_id`, `max_generate`, `queue_g3` (default true), `max_queue`. Public/external mutators only; `_` internals and ALL_CAPS constants dropped. Auto-queues top-N distinguishing G3 tests. | `gap_fill` (+ Phase 5 `experiments`) |
 
 ## Phase 5 — Experiment
 
 | Tool | Input highlights | Writes |
 |---|---|---|
 | `sandbox_forge` | `service`, `out_dir` | `sandbox` |
-| `invariant_tester` | `hypothesis_id`, `test_code`, `execute`, `command` | `experiments` |
-| `record_experiment` | `hypothesis_id`, `verdict`, `output_path` | `experiments` |
+| `invariant_tester` | `hypothesis_id`, `test_code`, `execute`, `command`, `experiment_class` (default distinguishing) | `experiments` |
+| `record_experiment` | `hypothesis_id`, `verdict`, `output_path`, `experiment_class`. confirmed/refuted require a distinguishing attack, not a happy-path or code-fact check. | `experiments` |
+| `queue_cartesian_g3` | `max_queue` (default 8). Writes prepared distinguishing tests for the top ranked public mutator × value-sink pairs. Never executes. | `experiments` |
 
 ## Phase 6 — Validate & Report
 
 | Tool | Input highlights | Writes |
 |---|---|---|
-| `disprove_finding` | `hypothesis_id`, `checks[]` | `disproofs` |
+| `disprove_finding` | `hypothesis_id`, `checks[]`, `variant` (required to kill a family hyp; kill is per-variant). Overflow/revert that freezes a value flow is not 'unreachable'. Wrong-protocol kills require an excerpt→in-scope function map. | `disproofs` |
 | `verify_citations` | `phases`, `include_markdown` | `citations` |
 | `classify_finding` | `hypothesis_id`, `impact`, `trigger`, `reachability`, `human_approved` | `classifications` |
 | `coverage_check` | `max_gaps`. Fails closed (ratio 0) if any critical flow is unmapped. | `coverage` |
