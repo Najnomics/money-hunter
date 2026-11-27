@@ -47,7 +47,7 @@ class OverlaySelectionTests(unittest.TestCase):
     def test_harness_matches_g3_contracts_not_a_glob_path(self):
         src = (ROOT / "tools" / "g3_harness.py").read_text(encoding="utf-8")
         self.assertIn('"--match-contract"', src)
-        self.assertIn('"ApexG3"', src)
+        self.assertIn('"ApexG3Generated"', src)
         self.assertNotIn("test/apex_g3/*", src)
 
     def test_overlay_module_has_no_finding_ids(self):

@@ -190,9 +190,9 @@ def run_distinguishing(
         "--root",
         str(root),
         "--match-contract",
-        "ApexG3",
+        "ApexG3Generated",
         "--match-test",
-        f"^{test_name}$",
+        test_name,
         "-vv",
     ]
     result = run_command(command, cwd=root, timeout_seconds=timeout_seconds, env=env)
