@@ -43,7 +43,11 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:oracle_price_move — Close/execute after a material mark move, not at the seed price.
         _publish(1.5e8);
         uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
-        router.executeOrder(oid, _mockPythUpdateData(1e8));
+        OrderV3Types.ExecutionResult memory execResult = router.executeOrder(oid, _mockPythUpdateData(1e8));
+        require(
+            uint8(execResult.status) == uint8(OrderV3Types.LifecycleStatus.Executed),
+            "execute after oracle/config print failed"
+        );
         require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");
     }
 
@@ -56,18 +60,6 @@ contract ApexG3GeneratedTest is G3Sequence {
         require(
             juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,
             "residual/HWM path minted nothing"
-        );
-    }
-
-    function test_attack_executeOrder_freeSettlement() public {
-        // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
-        _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
-        // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
-        _snapshotFree(ATTACKER);
-        OrderV3Types.ExecutionResult memory execResult = router.executeOrder(lastCommitId, _mockPythUpdateData(1.5e8));
-        require(
-            uint8(execResult.status) == uint8(OrderV3Types.LifecycleStatus.Executed),
-            "pending execute after print failed"
         );
     }
 
@@ -92,17 +84,6 @@ contract ApexG3GeneratedTest is G3Sequence {
         require(_freeOf(ATTACKER) < snapshotFree, "free settlement did not drop");
     }
 
-    function test_attack_settleLpEpoch_sharePrice() public {
-        // strategy:receipt_open — NAV/sharePrice tests need a reclaimable receipt in flight. Open first so the outsider epoch is priced against that receipt.
-        _openFilled(ATTACKER, _long(), 60);
-        // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
-        _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        _snapshotNav();
-        _settleLpEpochForTest();
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
-    }
-
     function test_attack_executeOpen_degradedMode() public {
         // strategy:thin_pool — A 1M junior buffer is far above one-side maxProfit, so a hedge close cannot trip effectiveAssets < maxLiability. Thin cash first.
         _thinPool();
@@ -111,7 +92,11 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:oracle_price_move — Close/execute after a material mark move, not at the seed price.
         _publish(1.5e8);
         uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
-        router.executeOrder(oid, _mockPythUpdateData(1e8));
+        OrderV3Types.ExecutionResult memory execResult = router.executeOrder(oid, _mockPythUpdateData(1e8));
+        require(
+            uint8(execResult.status) == uint8(OrderV3Types.LifecycleStatus.Executed),
+            "execute after oracle/config print failed"
+        );
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 

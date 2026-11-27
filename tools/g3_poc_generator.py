@@ -66,7 +66,12 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
         side = "_short()" if "skew_seed" in strategies else "_long()"
         return (
             f'        uint64 oid = _commitAs(ATTACKER, _openReq("x", {side}, 60));\n'
-            "        router.executeOrder(oid, _mockPythUpdateData(1e8));"
+            "        OrderV3Types.ExecutionResult memory execResult = "
+            "router.executeOrder(oid, _mockPythUpdateData(1e8));\n"
+            "        require(\n"
+            "            uint8(execResult.status) == uint8(OrderV3Types.LifecycleStatus.Executed),\n"
+            '            "execute after oracle/config print failed"\n'
+            "        );"
         )
     if fn == "executeClose":
         return "        _closeFilled(ATTACKER);"

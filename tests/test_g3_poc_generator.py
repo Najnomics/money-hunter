@@ -43,6 +43,11 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_openFilled(VICTIM, _long()", src_o)
         self.assertIn("_short()", src_o)
 
+    def test_execute_order_accepted_basket_requires_executed(self):
+        src = render_test("executeOrder", "acceptedBasket", "oracle-staleness-calendar-watermark")
+        self.assertIn("LifecycleStatus.Executed", src)
+        self.assertIn("execute after oracle/config print failed", src)
+
     def test_execute_order_freesettlement_executes_the_pending_head(self):
         src = render_test("executeOrder", "freeSettlement", "delayed-order-optionality")
         self.assertIn("lastCommitId = _commitAs", src)
@@ -85,9 +90,9 @@ class G3PocGeneratorTests(unittest.TestCase):
         from tools.g3_poc_generator import blind_items
 
         named, pair_only = blind_items()
-        self.assertEqual(len(named), 18)
+        self.assertEqual(len(named), 16)
         self.assertEqual(len(pair_only), 25)
-        self.assertEqual(len(VERIFIED_IDS), 25)
+        self.assertEqual(len(VERIFIED_IDS), 27)
         src = GEN.read_text(encoding="utf-8")
         self.assertNotIn("findings/plether-key", src)
 
