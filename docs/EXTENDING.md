@@ -1,4 +1,4 @@
-# Extending Apex Core
+# Extending Money Hunter
 
 There are two ways to add capability without editing the core workflow.
 

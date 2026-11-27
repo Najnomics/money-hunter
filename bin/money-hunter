@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Stable launcher for Apex Core.
+# Stable launcher for Money Hunter.
 #
 # Examples:
-#   ./bin/apex --list
-#   ./bin/apex 0 parse_scope --workspace /target --repos .
-#   ./bin/apex --mcp
+#   ./bin/money-hunter --list
+#   ./bin/money-hunter 0 parse_scope --workspace /target --repos .
+#   ./bin/money-hunter --mcp
 #
 # The launcher prefers the project virtualenv, then falls back to python3.
 set -euo pipefail

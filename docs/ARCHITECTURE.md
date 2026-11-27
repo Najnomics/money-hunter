@@ -1,4 +1,4 @@
-# Apex Core
+# Money Hunter
 
 Universal, domain-agnostic security-campaign pipeline exposed as a **Model
 Context Protocol (MCP) server** with a first-class **CLI fallback**. One core,
@@ -10,7 +10,7 @@ run a command.
 
 ## Why
 
-Naive pipelines jump from a mental model straight to blind scanning. Apex Core
+Naive pipelines jump from a mental model straight to blind scanning. Money Hunter
 forces the opposite: build an intent model, open the code, **map every
 divergence**, then dispatch a specialist lens per divergence and verify the
 hypothesis in a sandbox. Findings are compiled only from surviving, executed
@@ -28,7 +28,7 @@ without changing the workflow.
 ## Layout
 
 ```
-apex-core/
+money-hunter/
 ├── main.py                 # MCP server + CLI entry point
 ├── state_manager.py        # .apex/ artifacts, TargetProfile, phase gates
 ├── registry.py             # plugin auto-discovery
@@ -52,7 +52,7 @@ apex-core/
 ## Install
 
 ```bash
-cd apex-core
+cd money-hunter
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python main.py --list
@@ -66,7 +66,7 @@ language-specific regex extraction and records `method: "regex"`.
 Run from the **target workspace** so `.apex/` lands in the target:
 
 ```bash
-CORE=/path/to/apex-core/main.py
+CORE=/path/to/money-hunter/main.py
 
 # Phase 0
 python "$CORE" 0 parse_scope --repos . --endpoints https://api.example.com
@@ -125,10 +125,10 @@ Create `.cursor/mcp.json` in the project, or add to the user-level config:
 ```json
 {
   "mcpServers": {
-    "apex-core": {
+    "money-hunter": {
       "command": "python3",
       "args": [
-        "/ABS/PATH/apex-core/main.py",
+        "/ABS/PATH/money-hunter/main.py",
         "--mcp",
         "--workspace",
         "/ABS/PATH/TARGET"
@@ -143,7 +143,7 @@ Create `.cursor/mcp.json` in the project, or add to the user-level config:
 
 Cursor then exposes the grouped tools `phase0_ground` … `phase6_report`.
 Legacy names such as `phase0_parse_scope` require `APEX_TOOLSET=full`. Point
-`--workspace` at the audit target, not at `apex-core`.
+`--workspace` at the audit target, not at `money-hunter`.
 
 ## Claude Desktop (MCP)
 
@@ -156,10 +156,10 @@ Legacy names such as `phase0_parse_scope` require `APEX_TOOLSET=full`. Point
 ```json
 {
   "mcpServers": {
-    "apex-core": {
+    "money-hunter": {
       "command": "python3",
       "args": [
-        "/ABS/PATH/apex-core/main.py",
+        "/ABS/PATH/money-hunter/main.py",
         "--mcp",
         "--workspace",
         "/ABS/PATH/TARGET"
@@ -170,15 +170,15 @@ Legacy names such as `phase0_parse_scope` require `APEX_TOOLSET=full`. Point
 ```
 
 If your Python lives in a virtualenv, use its absolute interpreter path
-(`.../apex-core/.venv/bin/python`) instead of `python3`.
+(`.../money-hunter/.venv/bin/python`) instead of `python3`.
 
 ## Copilot / Kilocode / any CLI harness
 
 No MCP required. Give the agent `SYSTEM_PROMPT.md` and let it shell out:
 
 ```bash
-python /ABS/PATH/apex-core/main.py 0 parse_scope --workspace /ABS/PATH/TARGET --repos .
-python /ABS/PATH/apex-core/main.py --status --workspace /ABS/PATH/TARGET
+python /ABS/PATH/money-hunter/main.py 0 parse_scope --workspace /ABS/PATH/TARGET --repos .
+python /ABS/PATH/money-hunter/main.py --status --workspace /ABS/PATH/TARGET
 ```
 
 Parse the JSON response; do not scrape stdout text.
@@ -243,7 +243,7 @@ def my_lens(ctx, inp):
     return MyOutput()
 ```
 
-Drop a file under `apex-core/tools/phase4_my_lens.py`, or under
+Drop a file under `money-hunter/tools/phase4_my_lens.py`, or under
 `<target>/.apex/plugins/my_lens.py` (no restart of the core code needed). The
 registry auto-discovers modules exposing `TOOLS` and applies gates/schemas.
 Duplicate `(phase, name)` pairs are rejected.

@@ -1,6 +1,6 @@
-# Apex Core — Universal Campaign Instructions
+# Money Hunter — Universal Campaign Instructions
 
-You are auditing a software target using the Apex Core pipeline. The pipeline
+You are auditing a software target using the Money Hunter pipeline. The pipeline
 is domain-agnostic: Web2 APIs, distributed services, EVM, Solana, Move,
 Cosmos, or native binaries. The `TargetProfile` in `.apex/config.json` tells
 the tools which adapter to use. You never hardcode a chain or framework.

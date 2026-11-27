@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apex Core — dual MCP server and CLI entry point.
+"""Money Hunter — dual MCP server and CLI entry point.
 
 In plain English: this is the single front door.  It can run as an MCP server
 for Cursor/Claude, or as a normal command for Copilot/Kilocode.  Both modes use
@@ -233,7 +233,7 @@ def execute_tool(
 ) -> dict[str, Any]:
     # Resolution order: explicit per-call workspace, then the target bound by
     # start_campaign, then the server/CLI default.  The middle step is what
-    # makes "use apex-core on /target" a once-per-session action.
+    # makes "use money-hunter on /target" a once-per-session action.
     requested_workspace = raw.get("workspace")
     if requested_workspace:
         call_workspace = Path(str(requested_workspace)).expanduser().resolve()
@@ -342,7 +342,7 @@ def run_mcp(registry: PluginRegistry, state: StateManager, workspace: Path) -> i
 
     import asyncio
 
-    server = Server("apex-core")
+    server = Server("money-hunter")
     session = SessionState()
 
     def tool_defs() -> list[Any]:
@@ -421,7 +421,7 @@ def run_mcp(registry: PluginRegistry, state: StateManager, workspace: Path) -> i
 # ---------------------------------------------------------------------- CLI
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="apex-core",
+        prog="money-hunter",
         description="Adaptive security-campaign pipeline: MCP server + CLI.",
     )
     parser.add_argument("--mcp", action="store_true", help="Run as an MCP stdio server.")
@@ -438,7 +438,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", default=None, help="JSON object of tool arguments.")
     parser.add_argument("--args-file", default=None, help="Path to a JSON file of tool arguments.")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output.")
-    parser.add_argument("--version", action="version", version=f"apex-core {VERSION}")
+    parser.add_argument("--version", action="version", version=f"money-hunter {VERSION}")
     parser.add_argument("phase", nargs="?", help="Phase 0..6 (or phase0..phase6).")
     parser.add_argument("tool", nargs="?", help="Tool name, e.g. parse_scope.")
     parser.add_argument("rest", nargs=argparse.REMAINDER, help="Tool flags: --key value ...")
@@ -459,7 +459,7 @@ def main(argv: list[str] | None = None) -> int:
         extra_paths=[workspace / ".apex" / "plugins"] if (workspace / ".apex" / "plugins").is_dir() else []
     ).discover()
     for warning in registry.errors:
-        print(f"[apex-core] plugin warning: {warning}", file=sys.stderr)
+        print(f"[money-hunter] plugin warning: {warning}", file=sys.stderr)
 
     if args.list_tools:
         rows = registry.describe()

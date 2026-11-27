@@ -1,15 +1,21 @@
-# Apex Core
+# Money Hunter
 
 **A disciplined audit campaign manager for AI agents.**  
 **Version 1.1.0**
 
-Apex Core gives an agent a clear process for security work: understand the
+Money Hunter gives an agent a clear process for security work: understand the
 target, write down what should happen, compare it with the code, test the
 differences, and report only what survives. It runs as an **MCP server** or as a
 **normal command line tool**, so it works with Cursor, Claude Desktop, Copilot,
 Kilocode, or a custom harness.
 
 It is domain-agnostic: web APIs, EVM, Solana, Move, native binaries, or a mix.
+
+## Origin
+
+Money Hunter is a fork of [shaedy-apex-core](https://github.com/Najnomics/shaedy-apex-core).
+
+Recall on the Immunefi Plether contest pin `a82d4fe`: **62/63**. See [SCORE-L](findings/plether-blind3/SCORE-L.md). [FALSIFY-K](findings/plether-blind3/FALSIFY-K.md) re-checked 32 of those IDs as HOLD. Generic pipeline improvements are in [FIXES.md](findings/plether-blind3/FIXES.md).
 
 ## The idea in one picture
 
@@ -53,7 +59,7 @@ jumping straight to “findings.”
 ## Install
 
 ```bash
-cd apex-core
+cd money-hunter
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -75,7 +81,7 @@ pattern extraction and records that honestly.
 
 The script creates the venv, installs dependencies, syncs the intel corpus,
 writes the MCP config, and sets the policy. `--force` replaces an existing
-`apex-core` entry.
+`money-hunter` entry.
 
 
 ## Connect it to Cursor
@@ -86,8 +92,8 @@ the target workspace in each tool call. One server can serve every project.
 ```json
 {
   "mcpServers": {
-    "apex-core": {
-      "command": "/ABS/PATH/apex-core/bin/apex",
+    "money-hunter": {
+      "command": "/ABS/PATH/money-hunter/bin/money-hunter",
       "args": ["--mcp"],
       "env": {
         "APEX_INTEL_CORPUS": "/home/you/.apex/intel/bugbounty-intel"
@@ -121,8 +127,8 @@ Edit `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "apex-core": {
-      "command": "/ABS/PATH/apex-core/bin/apex",
+    "money-hunter": {
+      "command": "/ABS/PATH/money-hunter/bin/money-hunter",
       "args": ["--mcp"],
       "env": {
         "APEX_INTEL_CORPUS": "/home/you/.apex/intel/bugbounty-intel"
@@ -133,14 +139,14 @@ Edit `claude_desktop_config.json`:
 ```
 
 This is also one-time. The agent supplies the target workspace per call.
-`bin/apex` already prefers the project virtualenv, so no Python path is needed.
+`bin/money-hunter` already prefers the project virtualenv, so no Python path is needed.
 
 ## Use it from Copilot, Kilocode, or any CLI agent
 No MCP needed. Give the agent `SYSTEM_PROMPT.md` and let it call:
 
 ```bash
-python /ABS/PATH/apex-core/main.py 0 parse_scope --workspace /ABS/PATH/TARGET --repos .
-python /ABS/PATH/apex-core/main.py --status --workspace /ABS/PATH/TARGET
+python /ABS/PATH/money-hunter/main.py 0 parse_scope --workspace /ABS/PATH/TARGET --repos .
+python /ABS/PATH/money-hunter/main.py --status --workspace /ABS/PATH/TARGET
 ```
 
 Read the JSON response; do not scrape console text.
@@ -161,7 +167,7 @@ actual), Impact, Proof of Code, and Recommendation(s). Use
 
 ## Team onboarding
 
-New to the tool? Read [How team members use Apex Core](docs/ONBOARDING.md) for
+New to the tool? Read [How team members use Money Hunter](docs/ONBOARDING.md) for
 the exact clone → install → MCP/CLI setup, target workspace rules, and the
 pipeline feedback mechanism.
 

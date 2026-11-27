@@ -1,6 +1,6 @@
 # Bundled intel patterns
 
-Protocol-agnostic technique cards shipped with Apex Core. `check_intel` always
+Protocol-agnostic technique cards shipped with Money Hunter. `check_intel` always
 scans this directory, even when the full `bugbounty-intel` corpus is not
 cloned. Phase 4 `seed_from_research` turns matching cards into hypotheses.
 

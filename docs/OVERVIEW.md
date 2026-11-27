@@ -1,13 +1,13 @@
-# Apex Core in plain English
+# Money Hunter in plain English
 
-Apex Core is a **campaign manager for security audits**. It does not “find
+Money Hunter is a **campaign manager for security audits**. It does not “find
 bugs” by itself. It gives an AI agent a disciplined process, a place to write
 down evidence, and a set of checks that stop it from claiming more than it can
 prove.
 
 Think of it like a criminal investigation:
 
-| Investigation idea | Apex Core equivalent |
+| Investigation idea | Money Hunter equivalent |
 |---|---|
 | Case file | The `.apex/` folder inside the target project |
 | Investigation stages | Phases 0 to 6 |
@@ -26,7 +26,7 @@ Think of it like a criminal investigation:
 ## Why the order matters
 
 Many automated audits jump from “read some code” to “run a scanner” to “write a
-finding.” That creates confident nonsense. Apex Core forces this order:
+finding.” That creates confident nonsense. Money Hunter forces this order:
 
 1. **Agree on the rules** — what is in scope, what is forbidden, what the system
    promises.

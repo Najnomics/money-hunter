@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-click setup for Apex Core.
+"""One-click setup for Money Hunter.
 
 What it does, in plain English:
   1. Creates a private Python environment for the tool.
@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 
 CORE = Path(__file__).resolve().parents[1]
-SERVER_NAME = "apex-core"
+SERVER_NAME = "money-hunter"
 
 
 def run(args: list[str], cwd: Path | None = None) -> None:
@@ -103,7 +103,7 @@ def claude_config_path() -> Path:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Set up Apex Core and MCP clients.")
+    parser = argparse.ArgumentParser(description="Set up Money Hunter and MCP clients.")
     parser.add_argument("--target", help="Target workspace. Omit for a global, per-call-workspace server.")
     parser.add_argument("--client", choices=["cursor", "claude", "both", "none"], default="none")
     parser.add_argument("--policy", choices=["light", "standard", "strict"], default="standard")

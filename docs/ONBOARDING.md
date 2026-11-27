@@ -1,4 +1,4 @@
-# How team members use Apex Core
+# How team members use Money Hunter
 
 This guide is for someone who wants to run an audit with an AI agent. You do
 **not** need to be a Python developer, but you do need to copy a few paths
@@ -7,7 +7,7 @@ correctly.
 ## What you need
 
 - Python 3.10 or newer
-- Git (or a copy of the `apex-core` folder)
+- Git (or a copy of the `money-hunter` folder)
 - A target codebase, service, or binary folder
 - An agent that supports MCP (Cursor, Claude Desktop) **or** a CLI agent
   (Copilot, Kilocode, custom)
@@ -16,7 +16,7 @@ correctly.
 
 ```bash
 git clone <your-repo-url>
-cd apex-core
+cd money-hunter
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -34,17 +34,17 @@ export APEX_TOOLSET=full    # grouped + legacy granular tools
 export APEX_TOOLSET=legacy  # original one-tool-per-action names only
 ```
 
-> `apex-core` is the **tool**. The target is the **thing you audit**. They are
-> different folders. Never point `--workspace` at `apex-core` itself.
+> `money-hunter` is the **tool**. The target is the **thing you audit**. They are
+> different folders. Never point `--workspace` at `money-hunter` itself.
 
 ## Step 2 — Pick a target workspace
 
 The target workspace is the folder that contains the code or artifacts you are
-allowed to audit. Apex Core will create a `.apex/` folder **inside that target**.
+allowed to audit. Money Hunter will create a `.apex/` folder **inside that target**.
 
 ```bash
 TARGET=/absolute/path/to/your/target
-CORE=/absolute/path/to/apex-core/main.py
+CORE=/absolute/path/to/money-hunter/main.py
 
 python "$CORE" --policy standard --workspace "$TARGET"
 ```
@@ -72,7 +72,7 @@ intel corpus, writes the MCP config, and sets the campaign policy.
 ```
 
 It backs up an unparseable existing config and does not overwrite an existing
-`apex-core` entry unless you pass `--force`.
+`money-hunter` entry unless you pass `--force`.
 
 ## Step 3 — Choose how the agent connects
 
@@ -85,10 +85,10 @@ Add the server to the client’s config.
 ```json
 {
   "mcpServers": {
-    "apex-core": {
-      "command": "/absolute/path/to/apex-core/.venv/bin/python",
+    "money-hunter": {
+      "command": "/absolute/path/to/money-hunter/.venv/bin/python",
       "args": [
-        "/absolute/path/to/apex-core/main.py",
+        "/absolute/path/to/money-hunter/main.py",
         "--mcp",
         "--workspace",
         "/absolute/path/to/your/target"
@@ -125,8 +125,8 @@ pass `workspace` in each tool call:
 ```json
 {
   "mcpServers": {
-    "apex-core": {
-      "command": "/absolute/path/to/apex-core/bin/apex",
+    "money-hunter": {
+      "command": "/absolute/path/to/money-hunter/bin/money-hunter",
       "args": ["--mcp"],
       "env": {
         "APEX_INTEL_CORPUS": "/home/you/.apex/intel/bugbounty-intel"
@@ -160,7 +160,7 @@ No MCP configuration. Give the agent two things:
 2. The command pattern and the absolute paths:
 
 ```bash
-CORE=/absolute/path/to/apex-core/main.py
+CORE=/absolute/path/to/money-hunter/main.py
 TARGET=/absolute/path/to/your/target
 
 python "$CORE" --status --workspace "$TARGET"
@@ -169,7 +169,7 @@ python "$CORE" 0 parse_scope --workspace "$TARGET" --repos .
 
 Tell the agent:
 
-> Use Apex Core through `python "$CORE" <phase> <tool> --workspace "$TARGET"`.
+> Use Money Hunter through `python "$CORE" <phase> <tool> --workspace "$TARGET"`.
 > Read the JSON response. Do not skip a phase. If a gate blocks you, run the
 > missing tool. If a tool is missing or confusing, call `report_issue`.
 
@@ -235,7 +235,7 @@ the final report under **Agent feedback & missing tools**.
 
 ## Intel corpus: linked, not vendored
 
-The `bugbounty-intel` repository is **not** committed into Apex Core. It is a
+The `bugbounty-intel` repository is **not** committed into Money Hunter. It is a
 53 MB, constantly changing corpus. The core expects it at:
 
 ```text
@@ -261,19 +261,19 @@ you always know how fresh the intel was. The MCP config can also pass the path:
 ```
 
 Update cadence: run `sync-intel.sh` before a new campaign, or weekly. Do not
-copy the corpus into the `apex-core` repository.
+copy the corpus into the `money-hunter` repository.
 
 ## Step 7 — Update the core
 
 ```bash
-cd apex-core
+cd money-hunter
 git pull
 source .venv/bin/activate
 pip install -r requirements.txt
 python main.py --list
 ```
 
-Campaign state is in the target’s `.apex/`, not in `apex-core`, so updating the
+Campaign state is in the target’s `.apex/`, not in `money-hunter`, so updating the
 core does not delete a campaign. Re-run `--status` after an update.
 
 ## Troubleshooting

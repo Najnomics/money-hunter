@@ -1,4 +1,4 @@
-# Apex Core — universal campaign pipeline
+# Money Hunter — universal campaign pipeline
 # Python 3.10+
 mcp>=1.2.0
 pydantic>=2.6,<3

@@ -1,12 +1,11 @@
-# Publishing Apex Core
+# Publishing Money Hunter
 
-`apex-core` is its own repository. It is not part of the `bugbounty-intel`
+`money-hunter` is its own repository. It is not part of the `bugbounty-intel`
 repository, and the intel corpus is never vendored here.
 
 ## What is already done
 
-A local Git repository exists on branch `main` with the first commit. No remote
-has been added yet.
+The canonical remote is [Najnomics/money-hunter](https://github.com/Najnomics/money-hunter).
 
 ```bash
 git log --oneline -1
@@ -15,21 +14,9 @@ git status
 
 ## Create the remote and push
 
-Pick the organisation that should own the tool. For example:
-
 ```bash
-# Under your personal account, private by default
-gh repo create Sir-Shaedy/apex-core --private --source=. --remote=origin --push
-
-# Or under the team organisation
-gh repo create Najnomics/apex-core --private --source=. --remote=origin --push
-```
-
-If you prefer to create the repository in the GitHub UI:
-
-```bash
-git remote add origin git@github.com:<org>/apex-core.git
-git push -u origin main
+git remote add money https://github.com/Najnomics/money-hunter.git
+git push -u money HEAD:main
 ```
 
 ## What is intentionally excluded

@@ -1,4 +1,4 @@
-"""Shared runtime types for Apex Core tools.
+"""Shared runtime types for Money Hunter tools.
 
 A tool is a ``ToolSpec``: a typed input model, a typed output model, a phase,
 a persistence target, and a handler. Handlers never touch the filesystem
