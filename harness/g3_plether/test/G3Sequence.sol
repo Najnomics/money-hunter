@@ -227,6 +227,15 @@ abstract contract G3Sequence is BasePerpTest {
         snapshotTreasury = clearinghouse.balanceAssets(engine.protocolTreasury());
     }
 
+    function settleLpEpochForTry() public {
+        _settleLpEpochForTest();
+    }
+
+    function _trySettleLpEpoch() internal {
+        // try/catch requires an external call; the inherited helper is internal.
+        try this.settleLpEpochForTry() {} catch {}
+    }
+
     function _seedTraderClaim(address who, uint256 amount) internal {
         // Write leftover into the standing claim bucket. Do not open a live
         // position first: that path credits PnL pledge instead of free settlement.

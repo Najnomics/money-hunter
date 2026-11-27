@@ -111,7 +111,8 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertGreaterEqual(src.count("_warpToDepositEpoch"), 2)
         residual = src.index("_seedUnownedResidual")
         self.assertNotIn("_queueDeposit", src[residual:])
-        self.assertIn("try _settleLpEpochForTest()", src)
+        self.assertIn("_trySettleLpEpoch()", src)
+        self.assertNotIn("try _settleLpEpochForTest()", src)
 
     def test_addmargin_emits_free_snapshot_and_price_print(self):
         src = render_test("addMargin", "freeSettlement", "delayed-order-optionality")

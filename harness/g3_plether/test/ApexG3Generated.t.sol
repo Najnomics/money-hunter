@@ -97,7 +97,7 @@ contract ApexG3GeneratedTest is G3Sequence {
         _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
         // strategy:unowned_residual — Write leftover into the unassigned bucket after the deposit is queued. Minting it before requestDeposit freezes the vault; accountExcess after a matured head consumes the epoch.
         _seedUnownedResidual(1e6);
-        try _settleLpEpochForTest() {} catch {}
+        _trySettleLpEpoch();
         require(
             juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0
                 || pool.pendingRecapitalizationAssets() > 0,
@@ -154,7 +154,7 @@ contract ApexG3GeneratedTest is G3Sequence {
         _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
         // strategy:unowned_residual — Write leftover into the unassigned bucket after the deposit is queued. Minting it before requestDeposit freezes the vault; accountExcess after a matured head consumes the epoch.
         _seedUnownedResidual(1e6);
-        try _settleLpEpochForTest() {} catch {}
+        _trySettleLpEpoch();
         require(
             juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0
                 || pool.pendingRecapitalizationAssets() > 0,

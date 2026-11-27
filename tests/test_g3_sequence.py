@@ -173,6 +173,7 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("_openAtFirstLegalMark", src)
         self.assertIn("_snapshotLiqReserve", src)
         self.assertIn("_snapshotTreasury", src)
+        self.assertIn("_trySettleLpEpoch", src)
         self.assertNotIn("97591", src)
 
     def test_unowned_residual_helper_does_not_call_account_excess(self):

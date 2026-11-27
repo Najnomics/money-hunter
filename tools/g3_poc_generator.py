@@ -42,7 +42,7 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
                 "        _settleLpEpochForTest();"
             )
         if "unowned_residual" in strategies:
-            return "        try _settleLpEpochForTest() {} catch {}"
+            return "        _trySettleLpEpoch();"
         return "        _settleLpEpochForTest();"
     if fn == "assignUnassignedAssets":
         return "        pool.assignUnassignedAssets(false, ATTACKER);"
