@@ -143,11 +143,10 @@ abstract contract G3Sequence is BasePerpTest {
     }
 
     function _seedUnownedResidual(uint256 amount) internal {
-        // mint-to-pool + accountExcess books into accountedAssets / junior, so
-        // unassigned stays 0. Account the cash, then reserve that slice in the
-        // unassigned bucket so reconcile cannot treat it as junior revenue.
+        // Do not call accountExcess: it books the mint into junior and can
+        // freeze the next requestDeposit (DepositsUnavailable) or consume a
+        // matured LP head. Write the leftover directly into the unassigned bucket.
         settlementToken.mint(address(pool), amount);
-        try pool.accountExcess() {} catch {}
         uint256 current = pool.unassignedAssets();
         stdstore.target(address(pool)).sig("unassignedAssets()").checked_write(current + amount);
     }

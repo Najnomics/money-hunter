@@ -95,6 +95,12 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertNotIn("multi_actor_hedge", chosen)
         self.assertNotIn("oracle_price_move", chosen)
 
+    def test_unowned_residual_helper_does_not_call_account_excess(self):
+        src = (ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol").read_text(encoding="utf-8")
+        helper = src.split("function _seedUnownedResidual", 1)[1].split("function ", 1)[0]
+        self.assertIn("unassignedAssets", helper)
+        self.assertNotIn("pool.accountExcess", helper)
+
     def test_sequence_helper_can_snapshot_rebate_reserve(self):
         src = (ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol").read_text(encoding="utf-8")
         self.assertIn("vpiRebateReserveAssets", src)
