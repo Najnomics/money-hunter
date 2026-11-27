@@ -177,8 +177,9 @@ abstract contract G3Sequence is BasePerpTest {
     function _closeFilled(address who) internal {
         // Close at the live mark. A hardcoded 1.5e8 shock makes any close move NAV,
         // so rebate/sharePrice probes cannot be distinguished from directional PnL.
+        (uint256 size,,,, CfdTypes.Side side,,) = engine.positions(who);
         vm.prank(who);
-        uint64 oid = router.commitOrder(CfdTypes.Side.LONG, 50_000e18, 0, 0, true);
+        uint64 oid = router.commitOrder(side, size == 0 ? 50_000e18 : size, 0, 0, true);
         uint256 mark = engine.lastMarkPrice();
         router.executeOrder(oid, _mockPythUpdateData(mark == 0 ? 1e8 : mark));
     }

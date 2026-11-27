@@ -94,6 +94,7 @@ class SequenceSelectionTests(unittest.TestCase):
         src = (ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol").read_text(encoding="utf-8")
         close = src.split("function _closeFilled", 1)[1].split("function ", 1)[0]
         self.assertIn("lastMarkPrice", close)
+        self.assertIn("engine.positions(who)", close)
         self.assertNotIn("_mockPythUpdateData(1.5e8)", close)
 
     def test_strategy_module_has_no_finding_ids(self):
