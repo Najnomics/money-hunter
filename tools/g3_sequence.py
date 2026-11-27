@@ -52,7 +52,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="filled_position",
-        when_fn=_re(r"executeClose|settleTraderClaim|retryPosition"),
+        when_fn=_re(r"executeClose|settleTraderClaim|retryPosition|withdraw"),
         when_var=_re(r"rebate|sharePrice|traderClaim|freeSettlement|liquidationReserve"),
         when_family=frozenset(),
         setup="_openFilled(ATTACKER, _long(), 60);",

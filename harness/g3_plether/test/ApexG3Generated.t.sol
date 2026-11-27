@@ -68,11 +68,10 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_executeOpen_vpiRebateReserve() public {
-        _snapshotNav();
+        _snapshotRebate(ATTACKER);
         uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
         router.executeOrder(oid, _mockPythUpdateData(1e8));
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
+        require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");
     }
 
     function test_attack_executeLiquidationBatch_freeSettlement() public {
@@ -111,10 +110,9 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_executeClose_vpiRebateReserve() public {
         // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
         _openFilled(ATTACKER, _long(), 60);
-        _snapshotNav();
+        _snapshotRebate(ATTACKER);
         _closeFilled(ATTACKER);
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
+        require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");
     }
 
     function test_attack_executeOpen_degradedMode() public {
@@ -130,11 +128,12 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_withdraw_vpiRebateReserve() public {
-        _snapshotNav();
+        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
+        _openFilled(ATTACKER, _long(), 60);
+        _snapshotRebate(ATTACKER);
         uint256 free = _freeOf(ATTACKER);
         if (free > 0) { vm.prank(ATTACKER); clearinghouse.withdraw(ATTACKER, free); }
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
+        require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");
     }
 
     function test_attack_applyRouterConfigAfterOracle_acceptedBasket() public {
@@ -222,10 +221,9 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_retryPositionProtectionClose_vpiRebateReserve() public {
         // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
         _openFilled(ATTACKER, _long(), 60);
-        _snapshotNav();
+        _snapshotRebate(ATTACKER);
         _closeFilled(ATTACKER);
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
+        require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");
     }
 
     function test_attack_evaluateOpen_freeSettlement() public {

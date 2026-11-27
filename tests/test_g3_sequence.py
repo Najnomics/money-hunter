@@ -30,6 +30,12 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("_seedUnownedResidual", src)
         self.assertNotIn("pool.accountExcess", src)
 
+    def test_withdraw_rebate_needs_a_filled_position(self):
+        chosen = select_strategies("withdraw", "vpiRebateReserve", "refundable-receipt-in-nav")
+        self.assertIn("filled_position", chosen)
+        src = setup_block("withdraw", "vpiRebateReserve", "refundable-receipt-in-nav")
+        self.assertIn("_openFilled", src)
+
     def test_evaluate_open_freesettlement_prints_then_snapshots(self):
         chosen = select_strategies("evaluateOpen", "freeSettlement", "delayed-order-optionality")
         self.assertIn("locked_vs_free", chosen)

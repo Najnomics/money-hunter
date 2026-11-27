@@ -29,6 +29,15 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("pool.assignUnassignedAssets", src)
         self.assertNotIn("pool.accountExcess", src)
 
+    def test_rebate_var_asserts_reserve_not_junior_nav(self):
+        src = render_test("executeClose", "vpiRebateReserve", "refundable-receipt-in-nav")
+        self.assertIn("_snapshotRebate(ATTACKER)", src)
+        self.assertIn("_rebateOf(ATTACKER)", src)
+        self.assertNotIn("snapshotVictim", src)
+        src_w = render_test("withdraw", "vpiRebateReserve", "refundable-receipt-in-nav")
+        self.assertIn("_openFilled", src_w)
+        self.assertIn("_snapshotRebate(ATTACKER)", src_w)
+
     def test_addmargin_emits_free_snapshot_and_price_print(self):
         src = render_test("addMargin", "freeSettlement", "delayed-order-optionality")
         self.assertIn("_snapshotFree", src)

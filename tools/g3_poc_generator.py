@@ -120,7 +120,11 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
             '            revert("conversion not frozen");\n'
             "        } catch {}"
         )
-    if var in {"sharePrice", "nav", "totalAssets", "vpiRebateReserve", "pnlPledgeAssets"}:
+    if var == "vpiRebateReserve":
+        return (
+            '        require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");'
+        )
+    if var in {"sharePrice", "nav", "totalAssets", "pnlPledgeAssets"}:
         return (
             "        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));\n"
             '        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");'
@@ -176,7 +180,9 @@ def render_test(function: str, var: str, family: str = "") -> str:
     act = _act(function, var, strategies)
     assertion = _assert(function, var, family, strategies)
     snap = ""
-    if var in {"sharePrice", "nav", "totalAssets", "vpiRebateReserve", "pnlPledgeAssets", "seniorPrincipal"}:
+    if var == "vpiRebateReserve":
+        snap = "        _snapshotRebate(ATTACKER);"
+    if var in {"sharePrice", "nav", "totalAssets", "pnlPledgeAssets", "seniorPrincipal"}:
         snap = "        _snapshotNav();"
     if var in {"traderClaimBalance", "freeSettlement", "freeBalance"} and "locked_vs_free" not in strategies:
         snap = "        _snapshotFree(ATTACKER);"
