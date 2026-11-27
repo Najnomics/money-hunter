@@ -1,0 +1,80 @@
+[
+  {
+    "id": "L-P3-001",
+    "title": "Uninitialized proxy",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Core, IrmRouter, controller, vault, guardian initialized at pin. initialize as EOA reverts already initialized."
+  },
+  {
+    "id": "L-P3-002",
+    "title": "ERC-1967 admin upgrade",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Admin is Lido Agent 0x3e40d73e… on every listed proxy. Role within authority."
+  },
+  {
+    "id": "L-P3-003",
+    "title": "Permissionless factory binds rogue controller",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Factory cannot createMarket. Core createMarket as EOA reverts not owner."
+  },
+  {
+    "id": "L-P3-004",
+    "title": "CircuitBreaker unprivileged pause",
+    "gate1_divergence": "kill",
+    "gate1_reason": "pauseFor is PAUSER_ROLE. pauseDuration 21d is a parameter. Role within authority."
+  },
+  {
+    "id": "L-P3-005",
+    "title": "Unprivileged IRM swap",
+    "gate1_divergence": "kill",
+    "gate1_reason": "IrmRouter and AdaptiveCurveIrm gated; borrowRate only ROUTER; config immutable."
+  },
+  {
+    "id": "L-P3-006",
+    "title": "Controller on() from non-core",
+    "gate1_divergence": "kill",
+    "gate1_reason": "onlyControlledMarket requires msg.sender == core."
+  },
+  {
+    "id": "L-P3-007",
+    "title": "Unhooked flashLoan of collateral",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Inherited Morpho; SPECIFICATION C4; must repay; Morpho audits."
+  },
+  {
+    "id": "L-P3-008",
+    "title": "stakeEth transfers amount not shares",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Vendored Morpho Bundler3 pattern."
+  },
+  {
+    "id": "L-P3-009",
+    "title": "ActivateMarket skips binding checks",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_validateActivation calls factory validators and preseeder.validatePreseed."
+  },
+  {
+    "id": "L-P3-010",
+    "title": "Preseeder recover vs preseed race",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Stated recoverer role. Role within authority."
+  },
+  {
+    "id": "L-P3-011",
+    "title": "WstEthRateOracle mismatch",
+    "gate1_divergence": "kill",
+    "gate1_reason": "price() equals wstETH.getStETHByWstETH(1e36) at pin."
+  },
+  {
+    "id": "L-P3-012",
+    "title": "Vault deposit before createMarket",
+    "gate1_divergence": "kill",
+    "gate1_reason": "supply hits MARKET_NOT_CREATED. Vault empty."
+  },
+  {
+    "id": "L-P3-013",
+    "title": "Unprivileged guardian signal",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Reaffirm pass 1 authorized-sender check."
+  }
+]
