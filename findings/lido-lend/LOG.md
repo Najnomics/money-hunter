@@ -21,3 +21,9 @@ Branch: `cursor/lido-lend-audit`. Harness: Money Hunter pipeline, policy `standa
   fees; High = theft/freeze of unclaimed yield, temp freeze >=24h, guardian
   key extraction, role acquisition without grant; Med = block stuffing,
   griefing; Low = fails promised returns, no value loss.
+
+## 2026-11-27 — Phase 1 Research complete
+
+- Docs deep-dive before code: core spec, architecture, market-controller, lender-settlement, guardian-signals, roles, exit-books, IRM spec, bundler guide. Claims + ambiguity list in findings/lido-lend/DOCS.md.
+- Audits indexed (dedupe set): Cyfrin 62 (0c/0h) at pinned commits; MixBytes guardian; CB audits; Easy Track 11 low. findings/lido-lend/AUDITS.md.
+- Intel: corpus has no Lido-Lend rows; 6 mandatory family cards present; frontier: no public contest results; 2026 lending-hack median $756k.
