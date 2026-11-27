@@ -26,6 +26,9 @@ Bytecode snapshot: mainnet block **26508283** (`eth_getCode` keccak table in [PI
 | 1 Gate 1 | [PASS-1.md](PASS-1.md), [hunters/pass1.json](hunters/pass1.json) | 2 | 14 | 0 |
 | 2 Gates 2–3 | [PASS-2.md](PASS-2.md), [poc/fork_poc.py](poc/fork_poc.py) | 0 | 2 (L-P1-001, L-P1-002) | 0 |
 | 3 | [PASS-3.md](PASS-3.md), [hunters/pass3.json](hunters/pass3.json) | 0 | 13 | 0 |
+| 4 | [PASS-4.md](PASS-4.md) | 0 | 11 | 0 |
+| 5 | [PASS-5.md](PASS-5.md) | 0 | 10 | 0 |
+| 6 | [PASS-6.md](PASS-6.md), [poc/fork_poc.py](poc/fork_poc.py) (`006`) | 0 | 12 | 0 |
 | Web | [WEB.md](WEB.md) | 0 | n/a | 0 |
 
 L-P1-001: adapter `minExitAssets` is the documented loan+debtCanceled floor; live market `lastUpdate=0`; rounding gap 1 wei. Kill.
@@ -33,6 +36,8 @@ L-P1-001: adapter `minExitAssets` is the documented loan+debtCanceled floor; liv
 L-P1-002: both exit books `lastRequestId=0`; `fillExitRequest` reverts `RequestClosed`; debit-before-withdraw fail-closed. Kill.
 
 Proposed WETH/wstETH satellite proxies are initialized, empty, and admin'd by Lido Agent `0x3e40d73e…`. Core market not created. `lend.lido.fi` is a noindex static page with no wallet.
+
+Passes 4–6 (SC only, skip web): Morpho fork delta, empty exit books, CircuitBreaker pause bounds, IRM/Easy Track/Preseeder, GuardianSignals + daemon `src/`, controller/vault/oracle pre-activation, Bundler3 adapters. All additional leads killed. Still **0** verified. No Immunefi submission.
 
 ## Paths
 
@@ -42,6 +47,9 @@ findings/lido-lend/SCOPE.md
 findings/lido-lend/PASS-1.md
 findings/lido-lend/PASS-2.md
 findings/lido-lend/PASS-3.md
+findings/lido-lend/PASS-4.md
+findings/lido-lend/PASS-5.md
+findings/lido-lend/PASS-6.md
 findings/lido-lend/WEB.md
 findings/lido-lend/SUMMARY.md
 findings/lido-lend/poc/fork_poc.py
