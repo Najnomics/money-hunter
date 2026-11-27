@@ -1,0 +1,315 @@
+[
+  {
+    "id": "L-P1-001",
+    "title": "VaultAdapter minExitAssets uses up-rounded debt cancellation instead of seized collateral value",
+    "file": "src/adapters/LidoLendVaultAdapter.sol",
+    "line": 58,
+    "hypothesis": "fallbackExit returns debtCanceled from core settle's borrowAssetsCanceled (shares valued up). Seized collateral is priced from the same shares valued down, then divided by the oracle. The adapter's minExitAssets check adds loanAssets + debtCanceled and never reads collateralSeized. A bundle can pass the user's floor while the receiver's collateral is worth strictly less than that floor in loan-token units.",
+    "why_not_known_issue": "lender-settlement.md documents the two-sided rounding on settle itself. It does not state that Bundler3 slippage for vault fallback uses the up-rounded leg as the value of the down-rounded payout.",
+    "impact": "C",
+    "trigger": "A",
+    "gate1_divergence": "keep",
+    "gate1_reason": "Code path is live: LidoLendERC4626._settle returns the core's second value (borrowAssetsCanceled). LidoLend.settle computes that with toAssetsUp and seizedAssets with toAssetsDown then mulDivDown. Adapter lines 58-64 ignore the unused collateral return and compare minExitAssets to loanAssets + debtCanceled. Reachable by any vault-share owner who approved the adapter and started a Bundler3 bundle. Pass 2 must size a cut where up-minus-down exceeds the user's min delta.",
+    "poc_spec": {
+      "setup": "Fork pinned LidoLendERC4626 proxy after market activation, or a local market with non-1 share rates so toAssetsUp != toAssetsDown. Adapter 0xb1A64663B5390Ecf1a582df7e19d0a6753d1B84A.",
+      "actors": "Vault lender (bundle initiator), a borrower with personal settlement LTV or queue-root allowance.",
+      "steps": [
+        "Record previewRedeem and a settlement quote with borrowAssetsCanceled vs seizedAssets * oracle / 1e36.",
+        "Approve vault shares to LidoLendVaultAdapter.",
+        "Bundler3 multicall adapter.fallbackExit with minExitAssets = loanAssets + debtCanceled (the adapter's own sum) and minSharesBurned = 0.",
+        "Compare receiver collateral balance valued at the same oracle to minExitAssets."
+      ],
+      "assert": "The bundle succeeds. Receiver collateral value in loan units is below debtCanceled by the documented per-call rounding gap. If minExitAssets is set to that collateral value plus 1, the current adapter still succeeds.",
+      "foundry_hint": "lend-markets test/fork/VaultFallbackExit.t.sol; add an adapter bundle around fallbackExit."
+    }
+  },
+  {
+    "id": "L-P1-002",
+    "title": "Exit Book records the fill debit before the source withdraw",
+    "file": "src/periphery/ExitBookBase.sol",
+    "line": 272,
+    "hypothesis": "fillExitRequest calls _book.recordFill then _withdraw. If a source can return success with assetsOut != fillAssets, the debit is already stored. The AssetsOutMismatch check reverts the transaction, so a full revert would undo the debit. Keep only if some source withdraw succeeds with a mismatched balance under a token that does not revert, or if recordFill has external effects that survive revert (it should not).",
+    "why_not_known_issue": "exit-books.md says a fill cannot exceed what the source can withdraw. It does not discuss a debit-before-withdraw ordering bug; this row exists to force a source-by-source check on MorphoExitBook and Erc4626ExitBook.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "keep",
+    "gate1_reason": "Ordering is real at ExitBookBase.sol:272-279. AssetsOutMismatch uses a balance delta, which is the right check for fee-on-transfer but fails closed on mismatch. Pass 2 must read MorphoExitBook._withdraw and Erc4626ExitBook._withdraw for a path that credits the book without reverting and without matching fillAssets. Docs say no live market uses the books yet; bytecode is still in scope.",
+    "poc_spec": {
+      "setup": "Fork MorphoExitBook 0xAd28EFa8f2ef56a68b0Eb6836f4aE1d2D6459Ecd and Erc4626ExitBook 0x0d2580e4c9b20507eDFAeFC7777d760F12Ad55D4. Place a request against a source that can be made to pay a different amount (rebasing, fee, callback).",
+      "actors": "Lender who placed the request, permissionless filler.",
+      "steps": [
+        "Place a fillable request.",
+        "Fill with fillAssets equal to remaining.",
+        "Inspect request.assetsRemaining and token balances if the withdraw token is non-standard."
+      ],
+      "assert": "Either AssetsOutMismatch always reverts on mismatch (kill) or remaining is reduced without the book holding fillAssets (keep to Gate 3).",
+      "foundry_hint": "lend-markets test/scenario/ExitBook.t.sol"
+    }
+  },
+  {
+    "id": "L-P1-003",
+    "title": "Unprivileged heartbeat, flag, or suspect",
+    "file": "src/GuardianSignals.sol",
+    "line": 384,
+    "hypothesis": "A caller who is not the named guardian or its current delegate can heartbeat, flag, or suspect.",
+    "why_not_known_issue": "N/A — killed.",
+    "impact": "C",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_isSenderAuthorized requires onBehalf in the committee and msg.sender equal to that guardian or _delegates[onBehalf]. flag/unflag/suspect/unsuspect/heartbeat all call it first. prune is permissionless but only removes departed-guardian signals and may latch an already-derived ban, which guardian-signals.md describes.",
+    "poc_spec": {
+      "setup": "GuardianSignals proxy 0xc8a8CBBF4c55980F85332fD8470DF0fC52d690aC (proposed) or impl 0x66aFC8Bb3aB2f01127fDdEb05425bAD77923091f.",
+      "actors": "Arbitrary EOA.",
+      "steps": ["Call heartbeat/flag/suspect with onBehalf a guardian and as a random sender."],
+      "assert": "Revert Unauthorized.",
+      "foundry_hint": "lend-markets guardian unit tests."
+    }
+  },
+  {
+    "id": "L-P1-004",
+    "title": "Heartbeat timestamp not bound to the proven block header",
+    "file": "src/GuardianSignals.sol",
+    "line": 206,
+    "hypothesis": "A guardian can push the quorum frontier to block.timestamp while proving only a recent blockhash, advancing activation without having scanned that time.",
+    "why_not_known_issue": "Documented accepted risk in guardian-signals.md (Accepted guardian-timestamp trust). Quorum of guardian identities is the intended trust assumption.",
+    "impact": "C",
+    "trigger": "R-",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Spec warning states the frontier uses the guardian-supplied timestamp without checking it against the block header. Program OOS: documented intended/accepted risks. Unprivileged callers still fail L-P1-003.",
+    "poc_spec": {
+      "setup": "n/a",
+      "actors": "Guardian identity.",
+      "steps": [],
+      "assert": "Out of scope as documented.",
+      "foundry_hint": ""
+    }
+  },
+  {
+    "id": "L-P1-005",
+    "title": "Guardian daemon src/ leaks the signing key",
+    "file": "src/core/guardian.ts",
+    "line": 129,
+    "hypothesis": "An unprivileged reader of src/ or of daemon logs can recover the guardian private key.",
+    "why_not_known_issue": "N/A — killed.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Comment at guardian.ts:129: Guardian retains no signing material. Delivery uses an injected viem WalletClient. Events log stages, not key material. Key extract would require the operator's wallet process, which is outside src/ (OOS) or a still-unseen sink. Pass 2 may re-read src/chain/viem-client.ts logging once more; nothing in this pass prints a key.",
+    "poc_spec": {
+      "setup": "n/a",
+      "actors": "Unprivileged reader of the tagged src/ tree.",
+      "steps": ["Grep src/ for hex keys, mnemonic fields, dump of account.source."],
+      "assert": "No key material in src/.",
+      "foundry_hint": ""
+    }
+  },
+  {
+    "id": "L-P1-006",
+    "title": "Controller hook reentrancy into hooked market actions",
+    "file": "src/LidoLend.sol",
+    "line": 749,
+    "hypothesis": "During on(), a controller or token callback can enter supply/borrow/settle/liquidate on any market.",
+    "why_not_known_issue": "N/A — killed.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_hook sets transient _hookInProgress and every hooked action requires !_hookInProgress, including markets with no controller. A reverting on() discards transient storage. flashLoan and setAuthorization are unhooked; they do not move market accounting. Production controller on() is onlyControlledMarket (msg.sender == core).",
+    "poc_spec": {
+      "setup": "Controller mock that reenters settle from on().",
+      "actors": "Bound controller.",
+      "steps": ["Trigger a hooked action."],
+      "assert": "HOOK_REENTRANCY.",
+      "foundry_hint": "lend ReentrancyIntegrationTest"
+    }
+  },
+  {
+    "id": "L-P1-007",
+    "title": "First depositor inflation of LidoLendERC4626",
+    "file": "src/LidoLendERC4626.sol",
+    "line": 141,
+    "hypothesis": "Donating loan tokens or supplying to the vault's core position inflates convertToShares so a later depositor is rounded to zero shares.",
+    "why_not_known_issue": "N/A — killed.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "totalAssets uses _managedSupplyShares only. Direct core supply to the vault address is uncounted. decimals offset frozen at init. Donation of the loan token to the vault body does not increase managed shares.",
+    "poc_spec": {
+      "setup": "Empty vault.",
+      "actors": "Attacker, victim depositor.",
+      "steps": ["Donate or supply-on-behalf to the vault address, then victim deposit."],
+      "assert": "Share price unchanged; victim receives shares.",
+      "foundry_hint": "lend-markets ERC4626 unit tests"
+    }
+  },
+  {
+    "id": "L-P1-008",
+    "title": "Personal settlement leaves zero-collateral debt via riskKey ties",
+    "file": "src/controllers/LidoLendMarketController.sol",
+    "line": 545,
+    "hypothesis": "A rounded heap root can pass the bad-debt gate while a tied non-root is insolvent; personal settlement can then seize all collateral and leave debt to be written off.",
+    "why_not_known_issue": "Documented WARNING in lender-settlement.md (rounded root check, personal opt-in, partial cut). Program OOS: documented intended/accepted risks and documented rounding.",
+    "impact": "T",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "The combination is described in the spec as allowed and expected to be rare under the liquidator-window assumption. Same root cause as that warning.",
+    "poc_spec": {
+      "setup": "n/a",
+      "actors": "",
+      "steps": [],
+      "assert": "Out of scope as documented.",
+      "foundry_hint": ""
+    }
+  },
+  {
+    "id": "L-P1-009",
+    "title": "IrmRouter routes any implementation without an allowlist",
+    "file": "src/irm-router/IrmRouter.sol",
+    "line": 74,
+    "hypothesis": "An unprivileged caller can set a market's IRM to an arbitrary contract and brick or drain the market.",
+    "why_not_known_issue": "N/A — killed.",
+    "impact": "F+",
+    "trigger": "R-",
+    "gate1_divergence": "kill",
+    "gate1_reason": "_checkAuthorized is owner or manager. Live markets are accrued and probed. Uncreated markets are not probed, which roles.md records as C4 for the manager (EVMScriptExecutor). Role within authority. Unprivileged callers revert.",
+    "poc_spec": {
+      "setup": "IrmRouter proxy 0x81B7cC9523B30429110282d90db2fa90ff443d91.",
+      "actors": "Arbitrary EOA.",
+      "steps": ["setMarketIrm as non-owner/manager."],
+      "assert": "Revert.",
+      "foundry_hint": "lend-irm IrmRouterTest"
+    }
+  },
+  {
+    "id": "L-P1-010",
+    "title": "AdaptiveCurveConfig parameters can change after routing",
+    "file": "src/adaptive-curve-irm/AdaptiveCurveConfig.sol",
+    "line": 12,
+    "hypothesis": "Anyone can mutate the deployed config at 0x6076f89f5Cd68c526C73eA1F730d9ce8f05301a6 and move rates.",
+    "why_not_known_issue": "N/A — killed.",
+    "impact": "C",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "AdaptiveCurveConfig stores params as immutables. Factory deploys a new contract per params hash. A manager may later point AdaptiveCurveIrm at a non-factory mutable config; that is the documented C4 path, not an unprivileged write to this instance.",
+    "poc_spec": {
+      "setup": "Pinned AdaptiveCurveConfig.",
+      "actors": "Arbitrary EOA.",
+      "steps": ["Look for setters; eth_getCode size 872."],
+      "assert": "No setter; getCurveParams is view.",
+      "foundry_hint": "lend-irm AdaptiveCurveConfigTest"
+    }
+  },
+  {
+    "id": "L-P1-011",
+    "title": "WstEthRateOracle implementation is too small to be the Solidity source",
+    "file": "src/oracle/WstEthRateOracle.sol",
+    "line": 58,
+    "hypothesis": "On-chain impl 0xEA67847D37069bF385983c6f58e59dD6011A59a0 (338 bytes) is not WstEthRateOracle and may return a manipulable price.",
+    "why_not_known_issue": "N/A — killed pending bytecode identity, treated as non-finding this pass.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "The source is a single immutable plus getStETHByWstETH(1e36). 338 bytes matches a tiny compiler output, not a 45-byte EIP-1167 clone. Tests compare expectedImplementation = new WstEthRateOracle(wstETH). Price is Lido accounting rate under documented stETH/ETH par (OOS: bad debt from price).",
+    "poc_spec": {
+      "setup": "Fork oracle proxy 0x20a078F9940dC05C46De4153D1bCbd54D2b5b151.",
+      "actors": "Reader.",
+      "steps": ["price() vs wstETH.getStETHByWstETH(1e36)."],
+      "assert": "Equal.",
+      "foundry_hint": "lend-markets test/fork/EthStethFork.t.sol"
+    }
+  },
+  {
+    "id": "L-P1-012",
+    "title": "createMarket without a controller skips all Lido policy",
+    "file": "src/LidoLend.sol",
+    "line": 142,
+    "hypothesis": "Anyone can create a controller-less market on the pinned core and take funds from existing markets.",
+    "why_not_known_issue": "N/A — killed.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "onlyOwner. LidoLendOwner.createMarket(MarketParams) is MARKET_CREATOR_ROLE (EVMScriptExecutor). Markets are isolated by id. Documented C4/C1. Role within authority.",
+    "poc_spec": {
+      "setup": "Core proxy 0x026a770badc7126c7252Ef8d407E5b9C56147491.",
+      "actors": "Arbitrary EOA.",
+      "steps": ["createMarket as non-owner."],
+      "assert": "NOT_OWNER.",
+      "foundry_hint": "lend OnlyOwnerIntegrationTest"
+    }
+  },
+  {
+    "id": "L-P1-013",
+    "title": "Easy Track unfreeze does not require the market to be frozen",
+    "file": "contracts/EVMScriptFactories/lidoLendFactories/LidoLendMarketManagerActions.sol",
+    "line": 293,
+    "hypothesis": "A motion can unfreeze an unfrozen market and change other state as a side effect.",
+    "why_not_known_issue": "Commit 4caa911 message: remove frozen-state check for market unfreeze. Tests assert the motion succeeds regardless of frozen flag.",
+    "impact": "C",
+    "trigger": "R-",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Intended factory behavior at the Easy Track pin. Unfreeze is still gated by Easy Track + UNFREEZER_ROLE on the owner facade. Role within authority. No extra state change besides unfreeze.",
+    "poc_spec": {
+      "setup": "Factory 0x9D75EaE321976e85e472847AFD21246F1f87dC43.",
+      "actors": "Trusted caller.",
+      "steps": [],
+      "assert": "Documented.",
+      "foundry_hint": "easy-track tests/evm_script_factories/test_lido_lend_unfreeze_market.py"
+    }
+  },
+  {
+    "id": "L-P1-014",
+    "title": "Supply cap freeze after interest accrual",
+    "file": "src/controllers/LidoLendMarketController.sol",
+    "line": 403,
+    "hypothesis": "Interest can push totalSupplyAssets above supplyCap and freeze all new supplies permanently.",
+    "why_not_known_issue": "Cap is a parameter choice. Withdraw and settlement still reduce totals. Not a freeze of existing supplier claims.",
+    "impact": "F-",
+    "trigger": "K",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Existing positions can withdraw or settle. New deposits reverting at a full cap is the cap. Program OOS: parameter choices. Duration is not a ≥24h forced freeze of user funds.",
+    "poc_spec": {
+      "setup": "Market at cap.",
+      "actors": "New lender.",
+      "steps": ["Accrue, then supply."],
+      "assert": "SupplyCapExceeded; withdraw still works.",
+      "foundry_hint": ""
+    }
+  },
+  {
+    "id": "L-P1-015",
+    "title": "Vault settle burns Ceil vault shares vs exact core supply shares",
+    "file": "src/LidoLendERC4626.sol",
+    "line": 252,
+    "hypothesis": "Partial settlement burns more vault shares than the settled fraction, stealing from the exiting user into remaining holders, or the inverse insolvency.",
+    "why_not_known_issue": "Documented rounding; remaining-holder-favorable Ceil is stated in fallbackExit comments.",
+    "impact": "C",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "Ceil on the vault-share burn reduces the exiter's remaining claim and increases leftover holders' claim on leftover managed shares. Direction is not theft from remaining users. Dust on the exiter is promised-return / rounding (Low/OOS documented rounding).",
+    "poc_spec": {
+      "setup": "Vault with uneven share split.",
+      "actors": "Exiting lender, remaining lender.",
+      "steps": ["Partial settle."],
+      "assert": "Remaining holders are not shorted.",
+      "foundry_hint": ""
+    }
+  },
+  {
+    "id": "L-P1-016",
+    "title": "Implementation initialize on the LidoLend logic contract",
+    "file": "src/LidoLend.sol",
+    "line": 82,
+    "hypothesis": "Anyone can initialize the implementation at 0xa40Bd2281F54A2D3845F9535b74D2abD946E1911 and become owner.",
+    "why_not_known_issue": "N/A — killed.",
+    "impact": "T",
+    "trigger": "A",
+    "gate1_divergence": "kill",
+    "gate1_reason": "constructor sets isInitialized = true. initialize requires !isInitialized. Same pattern on IrmRouter implementation. Acquire-role-without-grant does not land on the impl.",
+    "poc_spec": {
+      "setup": "Impl 0xa40Bd2281F54A2D3845F9535b74D2abD946E1911.",
+      "actors": "Arbitrary EOA.",
+      "steps": ["initialize(attacker)."],
+      "assert": "ALREADY_INITIALIZED.",
+      "foundry_hint": ""
+    }
+  }
+]
