@@ -198,6 +198,34 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("engine.positions(who)", src)
         self.assertNotIn("_mockPythUpdateData(1.5e8)", close)
 
+    def test_real_degraded_latch_and_queued_protection_are_generic(self):
+        chosen = select_strategies("withdraw", "degradedMode", "delayed-order-optionality")
+        self.assertIn("real_degraded_latch", chosen)
+        src = setup_block("withdraw", "degradedMode", "delayed-order-optionality")
+        self.assertIn("_enterDegradedMode", src)
+        retry = select_strategies("retryPositionProtectionClose", "degradedMode", "delayed-order-optionality")
+        self.assertIn("real_degraded_latch", retry)
+        self.assertIn("queued_protection_retry", retry)
+        retry_src = setup_block("retryPositionProtectionClose", "degradedMode", "delayed-order-optionality")
+        self.assertIn("_queueAndExpireProtection(VICTIM)", retry_src)
+        self.assertLess(retry_src.index("_enterDegradedMode"), retry_src.index("_queueAndExpireProtection"))
+
+    def test_sequence_helpers_cover_protection_state_and_share_price(self):
+        src = (ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol").read_text(encoding="utf-8")
+        self.assertIn("protocolShareBps: 1000", src)
+        self.assertIn("function _enterDegradedMode", src)
+        self.assertIn("function _armProtection", src)
+        self.assertIn("function _queueAndExpireProtection", src)
+        self.assertIn("function _stateHash", src)
+        self.assertIn("function _sharePrice", src)
+        self.assertIn("engine.setProtocolTreasury(TREASURY)", src)
+        self.assertIn("controllerRedeemHead", src)
+        arm = src.split("function _armProtection", 1)[1].split("function _expireQueued", 1)[0]
+        self.assertIn("_publish", arm)
+        self.assertLess(arm.index("_protectionParams(who)"), arm.index("vm.prank(who)"))
+        self.assertNotIn("vm.mockCall", src)
+        self.assertNotIn("97592", src)
+
     def test_strategy_module_has_no_finding_ids(self):
         src = (ROOT / "tools" / "g3_sequence.py").read_text(encoding="utf-8")
         for finding in ("97591", "98209", "98854", "97590", "99136"):

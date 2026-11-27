@@ -119,8 +119,13 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
         return "        _queueDeposit(ATTACKER, 1_000e6);"
     if fn == "requestRedeem":
         return (
-            "        uint256 shares = juniorVault.balanceOf(address(this));\n"
-            "        if (shares > 0) { juniorVault.requestRedeem(shares / 2, address(this), address(this)); }"
+            "        vm.warp(block.timestamp + juniorVault.DEPOSIT_COOLDOWN() + 1);\n"
+            "        address planter = address(uint160(uint256(keccak256(\"g3.planter\"))));\n"
+            "        if (juniorVault.balanceOf(address(this)) > 1) {\n"
+            "            juniorVault.transfer(planter, 1);\n"
+            "            vm.prank(planter);\n"
+            "            juniorVault.requestRedeem(1, VICTIM, planter);\n"
+            "        }"
         )
     if fn == "executeLiquidationBatch":
         pending = "unsafe_price_sweep" in strategies or "price_print_then_mutate" in strategies
@@ -136,7 +141,7 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             return prefix + f"        {call};"
         return prefix + f"        try {call} {{}} catch {{}}"
     if fn == "renounceOwnership":
-        return "        try pool.renounceOwnership() {} catch {}"
+        return "        engine.renounceOwnership();"
     if fn == "applyCalendarConfig":
         return "        // calendar mutator — oracle helpers already ran\n        _publish(1.5e8);"
     if fn == "settleTraderClaim":
@@ -155,8 +160,12 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             "        accounts[0] = VICTIM;\n"
             "        try router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8)) {} catch {}"
         )
-    if re.search(r"arm|retry|protection", fn, re.I):
+    if re.search(r"retryPosition", fn, re.I):
+        if "queued_protection_retry" in strategies:
+            return "        protection.retryPositionProtectionClose(lastProtectionId);"
         return "        _closeFilled(ATTACKER);"
+    if re.search(r"arm", fn, re.I):
+        return "        lastProtectionId = _armProtection(VICTIM);"
     if re.search(r"config|calendar|oracle", fn, re.I):
         return "        _publish(1.5e8);"
     return (
@@ -177,9 +186,18 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
             '        require(_rebateOf(ATTACKER) != snapshotRebate, "rebate reserve was a no-op");'
         )
     if var in {"sharePrice", "nav", "totalAssets", "pnlPledgeAssets"}:
+        if function == "requestRedeem":
+            return (
+                "        require(\n"
+                "            _sharePrice() != snapshotSharePrice || _stateEffect(),\n"
+                '            "incumbent share price ignored VPI/fee config"\n'
+                "        );"
+            )
         return (
-            "        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));\n"
-            '        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");'
+            "        require(\n"
+            "            _sharePrice() != snapshotSharePrice,\n"
+            '            "incumbent share price ignored VPI/fee config"\n'
+            "        );"
         )
     if var == "seniorPrincipal":
         return (
@@ -275,15 +293,15 @@ def render_test(function: str, var: str, family: str = "") -> str:
     if var == "vpiRebateReserve":
         snap = "        _snapshotRebate(ATTACKER);"
     if var in {"sharePrice", "nav", "totalAssets", "pnlPledgeAssets"}:
-        snap = "        _snapshotNav();"
+        snap = "        _snapshotNav();\n        _snapshotSharePrice();\n        _snapshotState();"
     if var in {"seniorPrincipal", "highWaterMark"} and "second_pass" not in strategies:
         snap = "        _snapshotHwm();"
     if var in {"traderClaimBalance", "freeSettlement", "freeBalance"} and "locked_vs_free" not in strategies:
         snap = "        _snapshotFree(ATTACKER);"
     if var == "liquidationReserve":
         snap = "        _snapshotLiqReserve(ATTACKER);"
-    if var == "protocolTreasury":
-        snap = "        _snapshotTreasury();"
+    if var == "protocolTreasury" and "snapshot_before_fees" not in strategies:
+        snap = "        _snapshotTreasury();\n        _snapshotState();"
     if var in {"acceptedBasket", "currentExecutionConfigHash"}:
         snap = "        _snapshotMark();"
     body = "\n".join(p for p in (setup, snap, act, assertion) if p)

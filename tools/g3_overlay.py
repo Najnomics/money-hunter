@@ -26,6 +26,8 @@ def overlay_id(function: str, var: str, family: str = "") -> str:
         return "first_tick"
     if var_l in {"acceptedbasket", "currentexecutionconfighash"}:
         return "first_tick"
+    if "requestredeem" in fn_l:
+        return "redeem_controller"
     if "traderclaim" in var_l:
         return "pending_order"
     if fn_l == "addmargin" or (family == "delayed-order-optionality" and "free" in var_l):
@@ -250,6 +252,53 @@ def _patches() -> dict[str, list[tuple[str, str, str]]]:
                 "        preSkewAssets; postSkewAssets; depthAssets; vpiFactorWad;\n"
                 "        return (true, 0);\n"
                 "        (bool preValid, uint256 preCost) = tryGetSkewCost(preSkewAssets, depthAssets, vpiFactorWad);",
+            ),
+            (
+                "CfdEngineSettlementSidecar.sol",
+                "            host.pool(),\n"
+                "            host.protocolTreasury(),\n"
+                "            delta.executionFeeAssets",
+                "            host.pool(),\n"
+                "            address(0),\n"
+                "            delta.executionFeeAssets",
+            ),
+            (
+                "CfdEngineSettlementSidecar.sol",
+                "                host.pool(),\n"
+                "                host.protocolTreasury(),\n"
+                "                delta.actionProtocolFeeCreditedAssets",
+                "                host.pool(),\n"
+                "                address(0),\n"
+                "                delta.actionProtocolFeeCreditedAssets",
+            ),
+            (
+                "CfdEngineSettlementSidecar.sol",
+                "        IMarginClearinghouse(host.clearinghouse()).settleAssets(host.protocolTreasury(), int256(topUpAssets));",
+                "        IMarginClearinghouse(host.clearinghouse()).settleAssets(address(0), int256(topUpAssets));",
+            ),
+            (
+                "libraries/CloseAccountingLib.sol",
+                "        state.executionFeeAssets = (notionalAssets * inputs.executionFeeBps) / 10_000;",
+                "        state.executionFeeAssets = 0;",
+            ),
+            (
+                "libraries/OpenAccountingLib.sol",
+                "        state.executionFeeAssets = (state.notionalAssets * inputs.executionFeeBps) / 10_000;",
+                "        state.executionFeeAssets = 0;",
+            ),
+        ],
+        "redeem_controller": [
+            (
+                "TrancheVault.sol",
+                "        if (controller == address(0) || owner == address(0)) {\n"
+                "            revert TrancheVault__ZeroAddress();\n"
+                "        }",
+                "        if (controller == address(0) || owner == address(0)) {\n"
+                "            revert TrancheVault__ZeroAddress();\n"
+                "        }\n"
+                "        if (controller != owner) {\n"
+                "            revert TrancheVault__ZeroAddress();\n"
+                "        }",
             )
         ],
     }

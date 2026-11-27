@@ -98,6 +98,23 @@ class OverlaySelectionTests(unittest.TestCase):
         self.assertIn("traderClaimBalanceAssets(address)", src)
         self.assertIn("traderClaimBalanceAssets[account] > 0", src)
 
+    def test_zero_vpi_also_drops_protocol_treasury_credits(self):
+        src = (ROOT / "tools" / "g3_overlay.py").read_text(encoding="utf-8")
+        self.assertIn("address(0)", src)
+        self.assertIn("delta.executionFeeAssets", src)
+        self.assertIn("delta.actionProtocolFeeCreditedAssets", src)
+        self.assertIn("libraries/CloseAccountingLib.sol", src)
+        self.assertIn("state.executionFeeAssets = 0;", src)
+
+    def test_request_redeem_uses_controller_overlay(self):
+        self.assertEqual(
+            overlay_id("requestRedeem", "sharePrice", "refundable-receipt-in-nav"),
+            "redeem_controller",
+        )
+        src = (ROOT / "tools" / "g3_overlay.py").read_text(encoding="utf-8")
+        self.assertIn("redeem_controller", src)
+        self.assertIn("controller != owner", src)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,9 +13,13 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
         _snapshotNav();
+        _snapshotSharePrice();
+        _snapshotState();
         _settleLpEpochForTest();
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
+        require(
+            _sharePrice() != snapshotSharePrice,
+            "incumbent share price ignored VPI/fee config"
+        );
     }
 
     function test_attack_commitOrder_minPublishTime() public {
@@ -205,9 +209,13 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
         _snapshotNav();
+        _snapshotSharePrice();
+        _snapshotState();
         _settleLpEpochForTest();
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
+        require(
+            _sharePrice() != snapshotSharePrice,
+            "incumbent share price ignored VPI/fee config"
+        );
     }
 
     function test_attack_executeOrder_freeSettlement() public {
@@ -326,7 +334,11 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_retryPositionProtectionClose_degradedMode() public {
-        _closeFilled(ATTACKER);
+        // strategy:real_degraded_latch — degradedMode probes must enter through the live insolvency transition (thin cash, hedge, drain, close the winner), not a mocked flag.
+        _enterDegradedMode();
+        // strategy:queued_protection_retry — retryPositionProtectionClose needs a latched protection whose linked close is already terminal. Arm, trigger, expire, then retry before a new fill.
+        _queueAndExpireProtection(VICTIM);
+        protection.retryPositionProtectionClose(lastProtectionId);
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 
@@ -379,13 +391,24 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_requestRedeem_sharePrice() public {
+        // strategy:receipt_open — NAV/sharePrice tests need a reclaimable receipt in flight. Open first so the outsider epoch is priced against that receipt.
+        _openFilled(ATTACKER, _long(), 60);
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
         _snapshotNav();
-        uint256 shares = juniorVault.balanceOf(address(this));
-        if (shares > 0) { juniorVault.requestRedeem(shares / 2, address(this), address(this)); }
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
+        _snapshotSharePrice();
+        _snapshotState();
+        vm.warp(block.timestamp + juniorVault.DEPOSIT_COOLDOWN() + 1);
+        address planter = address(uint160(uint256(keccak256("g3.planter"))));
+        if (juniorVault.balanceOf(address(this)) > 1) {
+            juniorVault.transfer(planter, 1);
+            vm.prank(planter);
+            juniorVault.requestRedeem(1, VICTIM, planter);
+        }
+        require(
+            _sharePrice() != snapshotSharePrice || _stateEffect(),
+            "incumbent share price ignored VPI/fee config"
+        );
     }
 
     function test_attack_applyRouterConfig_currentExecutionConfigHash() public {
@@ -398,7 +421,9 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_renounceOwnership_degradedMode() public {
-        try pool.renounceOwnership() {} catch {}
+        // strategy:real_degraded_latch — degradedMode probes must enter through the live insolvency transition (thin cash, hedge, drain, close the winner), not a mocked flag.
+        _enterDegradedMode();
+        engine.renounceOwnership();
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 
@@ -429,17 +454,20 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_withdraw_degradedMode() public {
+        // strategy:real_degraded_latch — degradedMode probes must enter through the live insolvency transition (thin cash, hedge, drain, close the winner), not a mocked flag.
+        _enterDegradedMode();
         uint256 free = _freeOf(ATTACKER);
         if (free > 0) { vm.prank(ATTACKER); clearinghouse.withdraw(ATTACKER, free); }
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 
     function test_attack_settleLpEpoch_protocolTreasury() public {
+        // strategy:snapshot_before_fees — Treasury/fee probes must snapshot before an open credits protocol share, otherwise settle looks like a no-op on an already-updated bucket.
+        _snapshotTreasury(); _snapshotState();
         // strategy:receipt_open — NAV/sharePrice tests need a reclaimable receipt in flight. Open first so the outsider epoch is priced against that receipt.
         _openFilled(ATTACKER, _long(), 60);
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        _snapshotTreasury();
         _settleLpEpochForTest();
         require(
             clearinghouse.balanceAssets(engine.protocolTreasury()) != snapshotTreasury,
@@ -469,13 +497,19 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:filled_position — Close/margin probes need a live filled position, not an empty book.
         _openFilled(ATTACKER, _long(), 60);
         _snapshotNav();
+        _snapshotSharePrice();
+        _snapshotState();
         _closeFilled(ATTACKER);
-        uint256 victimAfter = juniorVault.convertToAssets(juniorVault.balanceOf(address(this)));
-        require(victimAfter != snapshotVictim, "incumbent assets ignored reclaimable receipt");
+        require(
+            _sharePrice() != snapshotSharePrice,
+            "incumbent share price ignored VPI/fee config"
+        );
     }
 
     function test_attack_arm_degradedMode() public {
-        _closeFilled(ATTACKER);
+        // strategy:real_degraded_latch — degradedMode probes must enter through the live insolvency transition (thin cash, hedge, drain, close the winner), not a mocked flag.
+        _enterDegradedMode();
+        lastProtectionId = _armProtection(VICTIM);
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 }

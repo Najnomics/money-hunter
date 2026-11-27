@@ -18,8 +18,9 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertIn("_warpToDepositEpoch", src)
         self.assertIn("_openFilled", src)
         self.assertIn("_snapshotNav", src)
-        self.assertIn("snapshotVictim", src)
-        self.assertIn("incumbent assets ignored reclaimable receipt", src)
+        self.assertIn("_snapshotSharePrice", src)
+        self.assertIn("incumbent share price ignored VPI/fee config", src)
+        self.assertIn("_snapshotSharePrice", src)
         self.assertLess(src.index("_openFilled"), src.index("_queueDeposit"))
         self.assertLess(src.index("_warpToDepositEpoch"), src.index("_snapshotNav"))
 
@@ -162,6 +163,39 @@ class G3PocGeneratorTests(unittest.TestCase):
             ]
         )
         self.assertEqual(src.count("function test_attack_settleLpEpoch_sharePrice"), 1)
+
+    def test_queued_protection_retry_acts_before_a_new_fill(self):
+        src = render_test("retryPositionProtectionClose", "degradedMode", "delayed-order-optionality")
+        self.assertIn("_enterDegradedMode", src)
+        self.assertIn("_queueAndExpireProtection(VICTIM)", src)
+        self.assertIn("protection.retryPositionProtectionClose(lastProtectionId)", src)
+        self.assertNotIn("vm.mockCall", src)
+        src_arm = render_test("_arm", "degradedMode", "delayed-order-optionality")
+        self.assertIn("_enterDegradedMode", src_arm)
+        self.assertIn("_armProtection(VICTIM)", src_arm)
+        src_rebate = render_test("retryPositionProtectionClose", "vpiRebateReserve", "delayed-order-optionality")
+        self.assertIn("_closeFilled(ATTACKER)", src_rebate)
+        self.assertNotIn("retryPositionProtectionClose(lastProtectionId)", src_rebate)
+
+    def test_state_effect_and_fee_config_distinguish_noops(self):
+        src = render_test("settleLpEpoch", "protocolTreasury", "refundable-receipt-in-nav")
+        self.assertIn("_snapshotTreasury", src)
+        self.assertIn("_snapshotState", src)
+        self.assertIn("protocol treasury path was a no-op", src)
+        self.assertLess(src.index("_snapshotTreasury"), src.index("_openFilled"))
+        src_r = render_test("renounceOwnership", "degradedMode", "false-emergency-mode")
+        self.assertIn("_enterDegradedMode", src_r)
+        self.assertIn("engine.renounceOwnership()", src_r)
+        self.assertNotIn("pool.renounceOwnership", src_r)
+        src_w = render_test("withdraw", "degradedMode", "delayed-order-optionality")
+        self.assertIn("_enterDegradedMode", src_w)
+        src_sp = render_test("requestRedeem", "sharePrice", "refundable-receipt-in-nav")
+        self.assertIn("_openFilled", src_sp)
+        self.assertIn("_snapshotSharePrice", src_sp)
+        self.assertIn("_snapshotState", src_sp)
+        self.assertIn("requestRedeem(1, VICTIM, planter)", src_sp)
+        self.assertIn("_stateEffect()", src_sp)
+        self.assertIn("incumbent share price ignored VPI/fee config", src_sp)
 
     def test_blind_catalog_is_named_open_plus_pair_only(self):
         from tools.g3_harness import NAMED_OPEN_IDS, VERIFIED_IDS

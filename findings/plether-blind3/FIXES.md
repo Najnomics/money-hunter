@@ -28,7 +28,7 @@ Inventory of every unique paid finding Blind2 dropped (`origin/cursor/plether-bl
 | 17 | G3 coverage | Happy-path/code-fact experiments do not count as tested. |
 | 18 | G4 freeze | A freeze-family G4 kill still requires the unreachable language to be treated as impact (reachability is a probe, not a disproof). |
 
-## Generic G3 harness improvements (SCORE-I / SCORE-J / SCORE-K)
+## Generic G3 harness improvements (SCORE-I / SCORE-J / SCORE-K / SCORE-L)
 
 Selected from `(function, var, family)` tokens only. No finding ids in the generic path. Each row has a unit test.
 
@@ -62,6 +62,12 @@ Selected from `(function, var, family)` tokens only. No finding ids in the gener
 | 46 | `g3_poc_generator._act` — withdraw × rebate closes the skew-reducing fill then withdraws released backing | `test_rebate_var_asserts_reserve_not_junior_nav`, `test_withdraw_rebate_holds_a_skew_reducing_open` | Withdraw after rebate-backed close; overlay zeros VPI so the reserve never existed |
 | 47 | `g3_overlay.pending_order` — block commit/close while `traderClaimBalanceAssets > 0` | `test_accepted_basket_and_claim_use_family_overlays` | Standing claim vs queued/live intent; commit/close must not proceed on leftover claim |
 | 48 | `g3_overlay.assign_outstanding` — freeze leftover assign to senior as well as junior | `test_assign_outstanding_keeps_hwm_monotonic`, `test_assign_unassigned_emits_residual_seed` | Senior-side HWM assign of unowned residual |
+| 49 | `g3_sequence.queued_protection_retry` + `G3Sequence._queueAndExpireProtection` — arm, trigger, expire the linked close, then retry before a new fill | `test_queued_protection_retry_acts_before_a_new_fill`, `test_real_degraded_latch_and_queued_protection_are_generic` | Permissionless retry/amend of a latched protection whose child is already terminal |
+| 50 | `G3Sequence._armProtection` — snapshot protection params before `vm.prank`; publish one in-order mark after latch | `test_sequence_helpers_cover_protection_state_and_share_price` | Protection create that consumed prank on `engine.positions()` or reverted `PriceOutOfOrder` after a close tick |
+| 51 | `G3Sequence._enterDegradedMode` — open hedge on full cash, drain, close the winner; no `vm.mockCall` | `test_real_degraded_latch_and_queued_protection_are_generic`, `test_state_effect_and_fee_config_distinguish_noops` | degradedMode probes that previously mocked the flag or opened into already-thin cash |
+| 52 | `G3Sequence._stateHash` / `_stateEffect` — balances, vault shares, redeem heads, and mark across touched accounts | `test_state_effect_and_fee_config_distinguish_noops` | Mutators that look like no-ops on one sink but still move claim-surface / share / treasury storage |
+| 53 | Non-zero VPI + `protocolShareBps: 1000`, dedicated `TREASURY`, `zero_vpi` zeros execution fees and remaining treasury credits | `test_zero_vpi_also_drops_protocol_treasury_credits`, `test_sequence_helpers_cover_protection_state_and_share_price` | sharePrice/treasury probes that were confounded with keeper identity or leftover directional PnL |
+| 54 | `g3_overlay.redeem_controller` — `requestRedeem` requires `controller == owner`; act plants a 1-share full-balance head | `test_request_redeem_uses_controller_overlay` | Third-party redeem enqueue under another controller that ERC-7540 claims then hide |
 
 Tests: `tests/test_g3_sequence.py`, `tests/test_g3_poc_generator.py`, `tests/test_g3_overlay.py`, plus `tests/test_plether_recall.py` and `tests/test_recall_gates.py`.
 

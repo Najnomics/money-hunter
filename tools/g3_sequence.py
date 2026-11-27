@@ -29,8 +29,19 @@ def _re(pattern: str) -> re.Pattern[str]:
 
 STRATEGIES: tuple[SequenceStrategy, ...] = (
     SequenceStrategy(
+        id="snapshot_before_fees",
+        when_fn=_re(r"settleLp"),
+        when_var=_re(r"protocolTreasury"),
+        when_family=frozenset(),
+        setup="_snapshotTreasury(); _snapshotState();",
+        why=(
+            "Treasury/fee probes must snapshot before an open credits protocol share, "
+            "otherwise settle looks like a no-op on an already-updated bucket."
+        ),
+    ),
+    SequenceStrategy(
         id="receipt_open",
-        when_fn=_re(r"settle|reconcile"),
+        when_fn=_re(r"settle|reconcile|requestRedeem"),
         when_var=_re(r"sharePrice|totalAssets|\bnav\b|rebate|accrued|pledge|protocolTreasury"),
         when_family=frozenset({"refundable-receipt-in-nav"}),
         setup="_openFilled(ATTACKER, _long(), 60);",
@@ -285,6 +296,28 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
             "Total balance often still includes committed/locked margin, so "
             "'balance did not drop' is a false fail. Snapshot free = balance - locked "
             "after the price print / commit, not the raw settlement balance."
+        ),
+    ),
+    SequenceStrategy(
+        id="real_degraded_latch",
+        when_fn=_re(r"withdraw|renounce|arm|retry"),
+        when_var=_re(r"degradedMode"),
+        when_family=frozenset(),
+        setup="_enterDegradedMode();",
+        why=(
+            "degradedMode probes must enter through the live insolvency transition "
+            "(thin cash, hedge, drain, close the winner), not a mocked flag."
+        ),
+    ),
+    SequenceStrategy(
+        id="queued_protection_retry",
+        when_fn=_re(r"retryPosition"),
+        when_var=_re(r"degradedMode"),
+        when_family=frozenset(),
+        setup="_queueAndExpireProtection(VICTIM);",
+        why=(
+            "retryPositionProtectionClose needs a latched protection whose linked close "
+            "is already terminal. Arm, trigger, expire, then retry before a new fill."
         ),
     ),
     SequenceStrategy(
