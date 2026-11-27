@@ -34,7 +34,14 @@ def _family(function: str, var: str, family: str = "") -> str:
 
 def _act(function: str, var: str, strategies: list[str]) -> str:
     fn = function
-    if fn == "settleLpEpoch":
+    if fn in {"settleLpEpoch", "reconcile"}:
+        if "second_pass" in strategies:
+            return (
+                "        _settleLpEpochForTest();\n"
+                "        _snapshotHwm();\n"
+                "        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();\n"
+                "        _settleLpEpochForTest();"
+            )
         return "        _settleLpEpochForTest();"
     if fn == "assignUnassignedAssets":
         return "        pool.assignUnassignedAssets(false, ATTACKER);"
@@ -64,7 +71,7 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
                 "        );"
             )
         side = "_short()" if "skew_seed" in strategies else "_long()"
-        return (
+        body = (
             f'        uint64 oid = _commitAs(ATTACKER, _openReq("x", {side}, 60));\n'
             "        OrderV3Types.ExecutionResult memory execResult = "
             "router.executeOrder(oid, _mockPythUpdateData(1e8));\n"
@@ -73,6 +80,9 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             '            "execute after oracle/config print failed"\n'
             "        );"
         )
+        if "counterparty_open" in strategies:
+            body += "\n        _closeFilled(VICTIM);"
+        return body
     if fn == "executeClose":
         return "        _closeFilled(ATTACKER);"
     if fn == "convertToShares":
@@ -87,8 +97,6 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             "        uint256 free = _freeOf(ATTACKER);\n"
             "        if (free > 0) { vm.prank(ATTACKER); clearinghouse.withdraw(ATTACKER, free); }"
         )
-    if fn == "reconcile":
-        return "        _settleLpEpochForTest();"
     if fn == "accountExcess":
         return "        try pool.accountExcess() {} catch {}"
     if fn == "requestDeposit":
@@ -99,17 +107,24 @@ def _act(function: str, var: str, strategies: list[str]) -> str:
             "        if (shares > 0) { juniorVault.requestRedeem(shares / 2, address(this), address(this)); }"
         )
     if fn == "executeLiquidationBatch":
-        return (
+        who = "ATTACKER" if "price_print_then_mutate" in strategies else "VICTIM"
+        call = "router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8))"
+        prefix = (
             "        address[] memory accounts = new address[](1);\n"
-            "        accounts[0] = VICTIM;\n"
-            "        try router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8)) {} catch {}"
+            f"        accounts[0] = {who};\n"
         )
+        if "price_print_then_mutate" in strategies:
+            return prefix + f"        {call};"
+        return prefix + f"        try {call} {{}} catch {{}}"
     if fn == "renounceOwnership":
         return "        try pool.renounceOwnership() {} catch {}"
     if fn == "applyCalendarConfig":
         return "        // calendar mutator — oracle helpers already ran\n        _publish(1.5e8);"
     if fn == "settleTraderClaim":
-        return "        vm.prank(ATTACKER);\n        try engine.settleTraderClaim(ATTACKER) {} catch {}"
+        return (
+            "        vm.prank(ATTACKER);\n"
+            "        engine.settleTraderClaim(ATTACKER);"
+        )
     if fn in {"assessCommittedOrder", "evaluateOpen"}:
         return '        _commitAs(ATTACKER, _openReq("a", _long(), 60));'
     if re.search(r"liquidation|adverse", fn, re.I):
@@ -154,7 +169,7 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
         )
     if var == "seniorPrincipal":
         return (
-            "        require(pool.seniorPrincipal() != snapshotNav, "
+            "        require(pool.seniorPrincipal() != snapshotSenior, "
             '"senior principal ignored residual/recap");'
         )
     if var == "traderClaimBalance":
@@ -165,7 +180,9 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
         return (
             '        require(engine.lastMarkPrice() != 0, "oracle/config path left mark at zero");'
         )
-    if var in {"unassignedAssets", "highWaterMark"}:
+    if var == "highWaterMark":
+        return '        require(pool.seniorHighWaterMark() != snapshotHwm, "HWM path was a no-op");'
+    if var == "unassignedAssets":
         return (
             "        require(\n"
             "            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,\n"
@@ -173,8 +190,17 @@ def _assert(function: str, var: str, family: str, strategies: list[str]) -> str:
             "        );"
         )
     if var in {"freeSettlement", "freeBalance"}:
+        if "liquidation" in function.lower():
+            return (
+                "        require(\n"
+                "            router.nextExecuteId() == 0 || _freeOf(ATTACKER) != snapshotFree,\n"
+                '            "liq cleanup left the pending order binding"\n'
+                "        );"
+            )
         if "price_print_then_mutate" in strategies and function.startswith("execute"):
             return ""
+        if function == "settleTraderClaim":
+            return '        require(_freeOf(ATTACKER) != snapshotFree, "claim/free path was a no-op");'
         return (
             '        require(_freeOf(ATTACKER) < snapshotFree, "free settlement did not drop");'
         )
@@ -209,8 +235,10 @@ def render_test(function: str, var: str, family: str = "") -> str:
         snap = "        _snapshotRebate(ATTACKER);"
         if function == "withdraw":
             snap += "\n        _snapshotNav();"
-    if var in {"sharePrice", "nav", "totalAssets", "pnlPledgeAssets", "seniorPrincipal"}:
+    if var in {"sharePrice", "nav", "totalAssets", "pnlPledgeAssets"}:
         snap = "        _snapshotNav();"
+    if var in {"seniorPrincipal", "highWaterMark"} and "second_pass" not in strategies:
+        snap = "        _snapshotHwm();"
     if var in {"traderClaimBalance", "freeSettlement", "freeBalance"} and "locked_vs_free" not in strategies:
         snap = "        _snapshotFree(ATTACKER);"
     body = "\n".join(p for p in (setup, snap, act, assertion) if p)

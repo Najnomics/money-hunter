@@ -20,6 +20,8 @@ abstract contract G3Sequence is BasePerpTest {
     uint256 internal snapshotNav;
     uint256 internal snapshotVictim;
     uint256 internal snapshotRebate;
+    uint256 internal snapshotHwm;
+    uint256 internal snapshotSenior;
     uint256 internal lastDepositRequest;
     uint256 internal openNonce;
     uint64 internal lastCommitId;
@@ -141,6 +143,29 @@ abstract contract G3Sequence is BasePerpTest {
 
     function _snapshotRebate(address who) internal {
         snapshotRebate = _rebateOf(who);
+    }
+
+    function _snapshotHwm() internal {
+        snapshotHwm = pool.seniorHighWaterMark();
+        snapshotSenior = pool.seniorPrincipal();
+    }
+
+    function _seedTraderClaim(address who, uint256 amount) internal {
+        // Write leftover into the standing claim bucket. Do not open a live
+        // position first: that path credits PnL pledge instead of free settlement.
+        settlementToken.mint(address(pool), amount);
+        uint256 accounted = pool.accountedAssets();
+        stdstore.target(address(pool)).sig("accountedAssets()").checked_write(accounted + amount);
+        uint256 current = engine.traderClaimBalanceAssets(who);
+        stdstore.target(address(engine)).sig("traderClaimBalanceAssets(address)").with_key(who).checked_write(current + amount);
+        uint256 total = engine.totalTraderClaimBalanceAssets();
+        stdstore.target(address(engine)).sig("totalTraderClaimBalanceAssets()").checked_write(total + amount);
+    }
+
+    function _seedPendingRecap(uint256 amount) internal {
+        settlementToken.mint(address(pool), amount);
+        uint256 current = pool.pendingRecapitalizationAssets();
+        stdstore.target(address(pool)).sig("pendingRecapitalizationAssets()").checked_write(current + amount);
     }
 
     function _seedUnownedResidual(uint256 amount) internal {

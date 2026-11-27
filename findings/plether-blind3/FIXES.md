@@ -28,7 +28,26 @@ Inventory of every unique paid finding Blind2 dropped (`origin/cursor/plether-bl
 | 17 | G3 coverage | Happy-path/code-fact experiments do not count as tested. |
 | 18 | G4 freeze | A freeze-family G4 kill still requires the unreachable language to be treated as impact (reachability is a probe, not a disproof). |
 
-Tests: `tests/test_plether_recall.py` (one case per miss) plus the existing `tests/test_recall_gates.py`.
+## Generic G3 harness improvements (SCORE-I)
+
+Selected from `(function, var, family)` tokens only. No finding ids in the generic path. Each row has a unit test.
+
+| Fix | File / function | Unit test | Future classes it detects |
+|---|---|---|---|
+| 21 | `g3_poc_generator._act` — execute pending FIFO head via `router.nextExecuteId()` | `test_execute_order_freesettlement_executes_the_pending_head` | Delayed-order optionality after a public print when a later commit is not the queue head |
+| 22 | `g3_sequence.thin_pool` / executeOpen at the seed mark, 70k buffer | `test_execute_open_degraded_opens_into_thin_cash_not_a_second_long` | False-emergency admission when a second long or 1.5x print is skew-illegal |
+| 23 | `g3_sequence.epoch_advance` matches LP settle/epoch only, not `settleTraderClaim` | `test_settle_trader_claim_seeds_claim_not_lp_epoch_or_live_fill` | Trader-claim probes that were starved by an unrelated LP-epoch warp |
+| 24 | `G3Sequence._seedTraderClaim` + `claim_seed` | `test_sequence_helpers_seed_claim_and_recap_buckets`, `test_settle_trader_claim_emits_claim_seed_and_pending_print` | Empty claim-bucket reverts; standing-claim vs queued-intent optionality |
+| 25 | `g3_sequence.pending_then_print` — commit + print without a live fill | `test_settle_trader_claim_seeds_claim_not_lp_epoch_or_live_fill` | Claim settlement that would otherwise take the live-position pledge branch |
+| 26 | `g3_poc_generator._act` — liquidation of the delayed-order account (not a bystander) | `test_execute_liquidation_delayed_order_targets_the_pending_account` | Liquidation cleanup that refunds a pinned open on the same account |
+| 27 | `g3_overlay.pending_order` — block `settleTraderClaim` while order margin is reserved | `test_pending_order_also_guards_withdraw_and_stacked_commit` | Owner-reachable claim payout that defunds a queued open |
+| 28 | `g3_overlay.pending_order` — block liquidation cleanup while live orders remain | same | Owner-reachable liquidation that cancels a queued intent |
+| 29 | `G3Sequence._seedPendingRecap` / `_snapshotHwm` + `pending_recap` / `second_pass` | `test_hwm_reconcile_seeds_recap_and_takes_a_second_pass` | Recap residual and non-idempotent HWM overwrite on a second observation |
+| 30 | `g3_overlay.assign_outstanding` — HWM only increases | `test_assign_outstanding_keeps_hwm_monotonic` | Repeated reconcile that erases a senior recovery watermark |
+| 31 | `g3_sequence.counterparty_open` + close the winner after executeOpen | `test_execute_open_degraded_closes_the_counterparty` | Admission that spends cash already owed to an opposite-side winner |
+| 32 | `g3_harness.run_distinguishing` — `--match-contract ApexG3` | `test_harness_matches_g3_contracts_not_a_glob_path` | Forge versions that drop `test/apex_g3/*` globs and report no tests |
+
+Tests: `tests/test_g3_sequence.py`, `tests/test_g3_poc_generator.py`, `tests/test_g3_overlay.py`, plus `tests/test_plether_recall.py` and `tests/test_recall_gates.py`.
 
 ## Per-finding map
 

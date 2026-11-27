@@ -41,7 +41,7 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="epoch_advance",
-        when_fn=_re(r"settle|epoch|reconcile|requestDeposit|requestRedeem"),
+        when_fn=_re(r"settleLp|epoch|reconcile|requestDeposit|requestRedeem"),
         when_var=_re(r"."),
         when_family=frozenset(),
         setup="_queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();",
@@ -64,11 +64,44 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
     ),
     SequenceStrategy(
         id="filled_position",
-        when_fn=_re(r"executeClose|settleTraderClaim|retryPosition|withdraw"),
+        when_fn=_re(r"executeClose|retryPosition|withdraw"),
         when_var=_re(r"sharePrice|traderClaim|freeSettlement|liquidationReserve"),
         when_family=frozenset(),
         setup="_openFilled(ATTACKER, _long(), 60);",
-        why="Close/margin/claim probes need a live filled position, not an empty book.",
+        why="Close/margin probes need a live filled position, not an empty book.",
+    ),
+    SequenceStrategy(
+        id="claim_seed",
+        when_fn=_re(r"settleTraderClaim"),
+        when_var=_re(r"freeSettlement|traderClaim"),
+        when_family=frozenset(),
+        setup="_seedTraderClaim(ATTACKER, 1e6);",
+        why=(
+            "settleTraderClaim reverts with an empty claim bucket. Seed leftover "
+            "into the standing claim before the mutator."
+        ),
+    ),
+    SequenceStrategy(
+        id="pending_recap",
+        when_fn=_re(r"settleLp|reconcile|assign"),
+        when_var=_re(r"highWaterMark|seniorPrincipal"),
+        when_family=frozenset({"hwm-recap-accounting"}),
+        setup="_seedPendingRecap(1e6);",
+        why=(
+            "HWM/senior overwrite needs a leftover recap bucket. An unowned mint "
+            "alone does not create a claimant residual for a second observation."
+        ),
+    ),
+    SequenceStrategy(
+        id="second_pass",
+        when_fn=_re(r"reconcile|settleLp"),
+        when_var=_re(r"highWaterMark|seniorPrincipal"),
+        when_family=frozenset({"hwm-recap-accounting"}),
+        setup="",
+        why=(
+            "HWM/recap overwrite is a second observation of the same books, "
+            "not the first solvent epoch."
+        ),
     ),
     SequenceStrategy(
         id="skew_seed",
@@ -115,6 +148,17 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
+        id="counterparty_open",
+        when_fn=_re(r"executeOpen"),
+        when_var=_re(r"degradedMode|emergency"),
+        when_family=frozenset({"false-emergency-mode"}),
+        setup="_openFilled(VICTIM, _short(), 60);",
+        why=(
+            "Admission backing is revealed when an opposite-side winner already exists. "
+            "A lone open into thin cash does not latch degradedMode."
+        ),
+    ),
+    SequenceStrategy(
         id="multi_actor_hedge",
         when_fn=_re(r"executeClose"),
         when_var=_re(r"degradedMode|emergency|frozen"),
@@ -156,8 +200,19 @@ STRATEGIES: tuple[SequenceStrategy, ...] = (
         ),
     ),
     SequenceStrategy(
+        id="pending_then_print",
+        when_fn=_re(r"settleTraderClaim"),
+        when_var=_re(r"freeSettlement|freeBalance"),
+        when_family=frozenset({"delayed-order-optionality"}),
+        setup='lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);',
+        why=(
+            "A standing claim can void a queued open only after the fill price is public. "
+            "Commit and print without a live position, which would take the pledge branch."
+        ),
+    ),
+    SequenceStrategy(
         id="locked_vs_free",
-        when_fn=_re(r"addMargin|withdraw|commit|execute|assess|evaluate"),
+        when_fn=_re(r"addMargin|withdraw|commit|execute|assess|evaluate|settleTraderClaim"),
         when_var=_re(r"freeSettlement|freeBalance|freeAssets|locked"),
         when_family=frozenset(),
         setup="_snapshotFree(ATTACKER);",

@@ -123,6 +123,34 @@ def _patches() -> dict[str, list[tuple[str, str, str]]]:
                 "        _validateFreshRequest(host, account, request, enforceProtectionLock);",
             ),
             (
+                "CfdEngine.sol",
+                "        uint256 amount = traderClaimBalanceAssets[account];\n"
+                "        if (amount == 0) {\n"
+                "            revert CfdEngine__NoTraderClaim();\n"
+                "        }",
+                "        if (clearinghouse.orderMarginAssets(account) > 0) {\n"
+                "            revert CfdEngine__Unauthorized();\n"
+                "        }\n"
+                "        uint256 amount = traderClaimBalanceAssets[account];\n"
+                "        if (amount == 0) {\n"
+                "            revert CfdEngine__NoTraderClaim();\n"
+                "        }",
+            ),
+            (
+                "router/OrderLiquidationHandler.sol",
+                "        uint256 orderCount = orderIds.length;\n"
+                "        for (uint256 i = 0; i < orderCount; ++i) {\n"
+                "            uint64 orderId = orderIds[i];\n"
+                "            (, CfdTypes.Order memory order) = _pendingOrder(orderId);",
+                "        uint256 orderCount = orderIds.length;\n"
+                "        if (orderCount > 0) {\n"
+                "            revert OrderRouter__SettlementFloorOrderPending(orderIds[0]);\n"
+                "        }\n"
+                "        for (uint256 i = 0; i < orderCount; ++i) {\n"
+                "            uint64 orderId = orderIds[i];\n"
+                "            (, CfdTypes.Order memory order) = _pendingOrder(orderId);",
+            ),
+            (
                 "OrderRouterExecutionSidecar.sol",
                 "        IOrderRouterExecutionHost host = IOrderRouterExecutionHost(address(this));\n"
                 "        uint64 head = host.nextExecuteId();\n"
@@ -144,6 +172,15 @@ def _patches() -> dict[str, list[tuple[str, str, str]]]:
             ),
         ],
         "assign_outstanding": [
+            (
+                "libraries/HousePoolPendingPreviewLib.sol",
+                "                state.waterfall.seniorHighWaterMark =\n"
+                "                    recapitalizationTargetAssets > remaining ? recapitalizationTargetAssets : remaining;",
+                "                uint256 nextHwm = recapitalizationTargetAssets > remaining ? recapitalizationTargetAssets : remaining;\n"
+                "                if (nextHwm > state.waterfall.seniorHighWaterMark) {\n"
+                "                    state.waterfall.seniorHighWaterMark = nextHwm;\n"
+                "                }",
+            ),
             (
                 "HousePool.sol",
                 "        uint256 shares = ITrancheVaultBootstrap(targetVault).quoteBootstrapDeposit(amount);\n"

@@ -106,19 +106,27 @@ contract ApexG3GeneratedTest is G3Sequence {
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
         // strategy:unowned_residual — Write leftover into the unassigned bucket after the deposit is queued. Minting it before requestDeposit freezes the vault; accountExcess after a matured head consumes the epoch.
         _seedUnownedResidual(1e6);
+        // strategy:pending_recap — HWM/senior overwrite needs a leftover recap bucket. An unowned mint alone does not create a claimant residual for a second observation.
+        _seedPendingRecap(1e6);
+        // strategy:second_pass — HWM/recap overwrite is a second observation of the same books, not the first solvent epoch.
         _settleLpEpochForTest();
-        require(
-            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,
-            "residual/HWM path minted nothing"
-        );
+        _snapshotHwm();
+        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
+        _settleLpEpochForTest();
+        require(pool.seniorHighWaterMark() != snapshotHwm, "HWM path was a no-op");
     }
 
     function test_attack_settleLpEpoch_seniorPrincipal() public {
         // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
         _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        _snapshotNav();
+        // strategy:pending_recap — HWM/senior overwrite needs a leftover recap bucket. An unowned mint alone does not create a claimant residual for a second observation.
+        _seedPendingRecap(1e6);
+        // strategy:second_pass — HWM/recap overwrite is a second observation of the same books, not the first solvent epoch.
         _settleLpEpochForTest();
-        require(pool.seniorPrincipal() != snapshotNav, "senior principal ignored residual/recap");
+        _snapshotHwm();
+        _queueDeposit(VICTIM, 1_000e6); _warpToDepositEpoch();
+        _settleLpEpochForTest();
+        require(pool.seniorPrincipal() != snapshotSenior, "senior principal ignored residual/recap");
     }
 
     function test_attack_executeOrder_acceptedBasket() public {
@@ -148,15 +156,15 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_assignUnassignedAssets_highWaterMark() public {
         // strategy:unowned_residual — Write leftover into the unassigned bucket after the deposit is queued. Minting it before requestDeposit freezes the vault; accountExcess after a matured head consumes the epoch.
         _seedUnownedResidual(1e6);
+        // strategy:pending_recap — HWM/senior overwrite needs a leftover recap bucket. An unowned mint alone does not create a claimant residual for a second observation.
+        _seedPendingRecap(1e6);
+        _snapshotHwm();
         pool.assignUnassignedAssets(false, ATTACKER);
-        require(
-            juniorVault.balanceOf(ATTACKER) > 0 || pool.unassignedAssets() > 0,
-            "residual/HWM path minted nothing"
-        );
+        require(pool.seniorHighWaterMark() != snapshotHwm, "HWM path was a no-op");
     }
 
     function test_attack_withdraw_freeSettlement() public {
-        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
+        // strategy:filled_position — Close/margin probes need a live filled position, not an empty book.
         _openFilled(ATTACKER, _long(), 60);
         // strategy:price_print_then_mutate — Delayed-order optionality is after the fill price is public. Commit, publish, then snapshot free and mutate.
         _openFilled(ATTACKER, _long(), 60); lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
@@ -218,19 +226,24 @@ contract ApexG3GeneratedTest is G3Sequence {
         // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
         address[] memory accounts = new address[](1);
-        accounts[0] = VICTIM;
-        try router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8)) {} catch {}
+        accounts[0] = ATTACKER;
+        router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8));
+        require(
+            router.nextExecuteId() == 0 || _freeOf(ATTACKER) != snapshotFree,
+            "liq cleanup left the pending order binding"
+        );
     }
 
     function test_attack_settleTraderClaim_freeSettlement() public {
-        // strategy:epoch_advance — settle/epoch reverts with no matured head (NoLpEpochProgress). Queue a pending deposit and warp to its epoch before the mutator.
-        _queueDeposit(VICTIM, 10_000e6); _warpToDepositEpoch();
-        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
-        _openFilled(ATTACKER, _long(), 60);
+        // strategy:claim_seed — settleTraderClaim reverts with an empty claim bucket. Seed leftover into the standing claim before the mutator.
+        _seedTraderClaim(ATTACKER, 1e6);
+        // strategy:pending_then_print — A standing claim can void a queued open only after the fill price is public. Commit and print without a live position, which would take the pledge branch.
+        lastCommitId = _commitAs(ATTACKER, _openReq("q", _long(), 60)); _publish(1.5e8);
+        // strategy:locked_vs_free — Total balance often still includes committed/locked margin, so 'balance did not drop' is a false fail. Snapshot free = balance - locked after the price print / commit, not the raw settlement balance.
         _snapshotFree(ATTACKER);
         vm.prank(ATTACKER);
-        try engine.settleTraderClaim(ATTACKER) {} catch {}
-        require(_freeOf(ATTACKER) < snapshotFree, "free settlement did not drop");
+        engine.settleTraderClaim(ATTACKER);
+        require(_freeOf(ATTACKER) != snapshotFree, "claim/free path was a no-op");
     }
 
     function test_attack_executeClose_vpiRebateReserve() public {
@@ -244,12 +257,15 @@ contract ApexG3GeneratedTest is G3Sequence {
     function test_attack_executeOpen_degradedMode() public {
         // strategy:thin_pool — A 1M junior buffer is far above one-side maxProfit, so a hedge close cannot trip effectiveAssets < maxLiability. Thin cash first.
         _thinPool();
+        // strategy:counterparty_open — Admission backing is revealed when an opposite-side winner already exists. A lone open into thin cash does not latch degradedMode.
+        _openFilled(VICTIM, _short(), 60);
         uint64 oid = _commitAs(ATTACKER, _openReq("x", _long(), 60));
         OrderV3Types.ExecutionResult memory execResult = router.executeOrder(oid, _mockPythUpdateData(1e8));
         require(
             uint8(execResult.status) == uint8(OrderV3Types.LifecycleStatus.Executed),
             "execute after oracle/config print failed"
         );
+        _closeFilled(VICTIM);
         require(engine.degradedMode(), "split close did not latch degradedMode");
     }
 
@@ -286,7 +302,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_executeClose_traderClaimBalance() public {
-        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
+        // strategy:filled_position — Close/margin probes need a live filled position, not an empty book.
         _openFilled(ATTACKER, _long(), 60);
         _snapshotFree(ATTACKER);
         _closeFilled(ATTACKER);
@@ -395,7 +411,7 @@ contract ApexG3GeneratedTest is G3Sequence {
     }
 
     function test_attack_executeClose_sharePrice() public {
-        // strategy:filled_position — Close/margin/claim probes need a live filled position, not an empty book.
+        // strategy:filled_position — Close/margin probes need a live filled position, not an empty book.
         _openFilled(ATTACKER, _long(), 60);
         _snapshotNav();
         _closeFilled(ATTACKER);

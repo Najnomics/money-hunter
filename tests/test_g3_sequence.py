@@ -98,21 +98,52 @@ class SequenceSelectionTests(unittest.TestCase):
         self.assertIn("_publish(1.5e8)", src)
         self.assertLess(src.index("_commitAs"), src.index("_publish"))
 
+    def test_settle_trader_claim_seeds_claim_not_lp_epoch_or_live_fill(self):
+        chosen = select_strategies("settleTraderClaim", "freeSettlement", "delayed-order-optionality")
+        self.assertIn("claim_seed", chosen)
+        self.assertIn("pending_then_print", chosen)
+        self.assertIn("locked_vs_free", chosen)
+        self.assertNotIn("epoch_advance", chosen)
+        self.assertNotIn("filled_position", chosen)
+        src = setup_block("settleTraderClaim", "freeSettlement", "delayed-order-optionality")
+        self.assertIn("_seedTraderClaim", src)
+        self.assertIn("_commitAs", src)
+        self.assertIn("_publish", src)
+        self.assertNotIn("_openFilled", src)
+        self.assertNotIn("_queueDeposit", src)
+
+    def test_hwm_reconcile_seeds_recap_and_takes_a_second_pass(self):
+        chosen = select_strategies("reconcile", "highWaterMark", "hwm-recap-accounting")
+        self.assertIn("pending_recap", chosen)
+        self.assertIn("second_pass", chosen)
+        src = setup_block("reconcile", "highWaterMark", "hwm-recap-accounting")
+        self.assertIn("_seedPendingRecap", src)
+
     def test_execute_open_degraded_opens_into_thin_cash_not_a_second_long(self):
         chosen = select_strategies("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("thin_pool", chosen)
+        self.assertIn("counterparty_open", chosen)
         self.assertNotIn("drain_cash", chosen)
         self.assertNotIn("multi_actor_hedge", chosen)
         src = setup_block("executeOpen", "degradedMode", "false-emergency-mode")
         self.assertIn("_thinPool();", src)
+        self.assertIn("_openFilled(VICTIM, _short()", src)
         self.assertNotIn("_publish(1.5e8)", src)
         self.assertNotIn("_thinPoolTo(10_000e6)", src)
-        self.assertNotIn("_openFilled(VICTIM", src)
 
     def test_random_deposit_total_supply_is_not_a_hedge_sequence(self):
         chosen = select_strategies("deposit", "totalSupply", "")
         self.assertNotIn("multi_actor_hedge", chosen)
         self.assertNotIn("oracle_price_move", chosen)
+
+    def test_sequence_helpers_seed_claim_and_recap_buckets(self):
+        src = (ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol").read_text(encoding="utf-8")
+        self.assertIn("_seedTraderClaim", src)
+        self.assertIn("traderClaimBalanceAssets", src)
+        self.assertIn("_seedPendingRecap", src)
+        self.assertIn("pendingRecapitalizationAssets", src)
+        self.assertIn("_snapshotHwm", src)
+        self.assertNotIn("97591", src)
 
     def test_unowned_residual_helper_does_not_call_account_excess(self):
         src = (ROOT / "harness" / "g3_plether" / "test" / "G3Sequence.sol").read_text(encoding="utf-8")

@@ -12,14 +12,14 @@
 | 98854 | C | NAMED_OPEN | `test_attack_addMargin_freeSettlement` | verified |
 | 97628 | H | NAMED_OPEN | `test_attack_convertToShares_totalSupply` | verified |
 | 97590 | H | NAMED_OPEN | `test_attack_executeClose_degradedMode` | verified |
-| 97760 | H | NAMED_OPEN | `test_attack_settleLpEpoch_unassignedAssets` | still_open |
-| 97844 | H | NAMED_OPEN | `test_attack_reconcile_highWaterMark` | still_open |
-| 97968 | H | NAMED_OPEN | `test_attack_settleLpEpoch_unassignedAssets` | still_open |
-| 99735 | H | NAMED_OPEN | `test_attack_settleLpEpoch_seniorPrincipal` | still_open |
+| 97760 | H | NAMED_OPEN | `test_attack_settleLpEpoch_unassignedAssets` | pin_fail |
+| 97844 | H | NAMED_OPEN | `test_attack_reconcile_highWaterMark` | pin_fail |
+| 97968 | H | NAMED_OPEN | `test_attack_settleLpEpoch_unassignedAssets` | pin_fail |
+| 99735 | H | NAMED_OPEN | `test_attack_settleLpEpoch_seniorPrincipal` | pin_fail |
 | 97603 | M | NAMED_OPEN | `test_attack_executeOrder_acceptedBasket` | verified |
-| 97848 | M | NAMED_OPEN | `test_attack_reconcile_unassignedAssets` | still_open |
-| 98994 | M | NAMED_OPEN | `test_attack_settleLpEpoch_unassignedAssets` | still_open |
-| 99501 | M | NAMED_OPEN | `test_attack_settleLpEpoch_unassignedAssets` | still_open |
+| 97848 | M | NAMED_OPEN | `test_attack_reconcile_unassignedAssets` | pin_fail |
+| 98994 | M | NAMED_OPEN | `test_attack_settleLpEpoch_unassignedAssets` | pin_fail |
+| 99501 | M | NAMED_OPEN | `test_attack_settleLpEpoch_unassignedAssets` | pin_fail |
 | 97715 | L | NAMED_OPEN | `test_attack_assignUnassignedAssets_highWaterMark` | verified |
 | 97733 | L | NAMED_OPEN | `test_attack_withdraw_freeSettlement` | verified |
 | 98961 | L | NAMED_OPEN | `test_attack_assignUnassignedAssets_highWaterMark` | verified |
@@ -28,19 +28,19 @@
 | 97858 | C | NAMED_OPEN | `test_attack_executeOrder_freeSettlement` | verified |
 | 98014 | C | PAIR-ONLY | `test_attack_applyRouterConfigAfterOracle_acceptedBasket` | still_open |
 | 98035 | C | NAMED_OPEN | `test_attack_executeOpen_vpiRebateReserve` | verified |
-| 98941 | C | NAMED_OPEN | `test_attack_executeLiquidationBatch_freeSettlement` | still_open |
+| 98941 | C | NAMED_OPEN | `test_attack_executeLiquidationBatch_freeSettlement` | pin_fail |
 | 99280 | C | PAIR-ONLY | `test_attack_commitOrder_freeSettlement` | verified |
-| 99536 | C | NAMED_OPEN | `test_attack_settleTraderClaim_freeSettlement` | still_open |
+| 99536 | C | NAMED_OPEN | `test_attack_settleTraderClaim_freeSettlement` | verified |
 | 99589 | C | NAMED_OPEN | `test_attack_settleLpEpoch_sharePrice` | verified |
 | 99756 | C | PAIR-ONLY | `test_attack_settleLpEpoch_seniorPrincipal` | still_open |
-| 99855 | C | NAMED_OPEN | `test_attack_reconcile_unassignedAssets` | still_open |
+| 99855 | C | NAMED_OPEN | `test_attack_reconcile_unassignedAssets` | pin_fail |
 | 100087 | C | PAIR-ONLY | `test_attack_executeClose_traderClaimBalance` | still_open |
 | 97592 | H | PAIR-ONLY | `test_attack_retryPositionProtectionClose_degradedMode` | still_open |
 | 97881 | H | PAIR-ONLY | `test_attack_settleLpEpoch_seniorPrincipal` | still_open |
 | 97903 | H | NAMED_OPEN | `test_attack_executeClose_vpiRebateReserve` | verified |
 | 98416 | H | PAIR-ONLY | `test_attack_applyCalendarConfig_acceptedBasket` | still_open |
 | 97601 | M | PAIR-ONLY | `test_attack_applyCalendarConfig_acceptedBasket` | still_open |
-| 97605 | M | NAMED_OPEN | `test_attack_executeOpen_degradedMode` | still_open |
+| 97605 | M | NAMED_OPEN | `test_attack_executeOpen_degradedMode` | pin_fail |
 | 97649 | M | PAIR-ONLY | `test_attack_executeLiquidationBatch_liquidationReserve` | still_open |
 | 97748 | M | NAMED_OPEN | `test_attack_executeClose_vpiRebateReserve` | verified |
 | 98795 | M | PAIR-ONLY | `test_attack_applyOpen_liquidationReserve` | still_open |
@@ -68,7 +68,7 @@
 | 99933 | L | NAMED_OPEN | `test_attack_executeClose_vpiRebateReserve` | verified |
 | 99136 | C | NAMED_OPEN | `test_attack_commitOrder_executionWindow` | verified |
 
-Verified: 97590, 97591, 97603, 97622, 97628, 97677, 97715, 97733, 97748, 97833, 97858, 97893, 97903, 97906, 97971, 98035, 98039, 98170, 98172, 98200, 98209, 98854, 98961, 99075, 99136, 99280, 99392, 99470, 99589, 99602, 99933.
+Verified: 97590, 97591, 97603, 97622, 97628, 97677, 97715, 97733, 97748, 97833, 97858, 97893, 97903, 97906, 97971, 98035, 98039, 98170, 98172, 98200, 98209, 98854, 98961, 99075, 99136, 99280, 99392, 99470, 99536, 99589, 99602, 99933.
 
 Parked pin-FAIL: 99795 `withdraw_vpiRebateReserve` — pending close + withdraw leaves rebate backing and incumbent NAV unchanged.
 

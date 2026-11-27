@@ -44,6 +44,12 @@ class OverlaySelectionTests(unittest.TestCase):
             "first_tick",
         )
 
+    def test_harness_matches_g3_contracts_not_a_glob_path(self):
+        src = (ROOT / "tools" / "g3_harness.py").read_text(encoding="utf-8")
+        self.assertIn('"--match-contract"', src)
+        self.assertIn('"ApexG3"', src)
+        self.assertNotIn("test/apex_g3/*", src)
+
     def test_overlay_module_has_no_finding_ids(self):
         src = (ROOT / "tools" / "g3_overlay.py").read_text(encoding="utf-8")
         for finding in ("97591", "98209", "98854", "97590", "99136", "97906"):
@@ -57,6 +63,14 @@ class OverlaySelectionTests(unittest.TestCase):
         self.assertIn("OrderRouter__SettlementFloorOrderPending(0)", src)
         self.assertIn("OrderRouterExecutionSidecar.sol", src)
         self.assertIn("liveSize > 0", src)
+        self.assertIn("CfdEngine__NoTraderClaim", src)
+        self.assertIn("OrderLiquidationHandler.sol", src)
+        self.assertIn("orderCount > 0", src)
+
+    def test_assign_outstanding_keeps_hwm_monotonic(self):
+        src = (ROOT / "tools" / "g3_overlay.py").read_text(encoding="utf-8")
+        self.assertIn("HousePoolPendingPreviewLib.sol", src)
+        self.assertIn("nextHwm > state.waterfall.seniorHighWaterMark", src)
 
 
 if __name__ == "__main__":

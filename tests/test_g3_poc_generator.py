@@ -56,6 +56,40 @@ class G3PocGeneratorTests(unittest.TestCase):
         self.assertNotIn("executeOrder(lastCommitId", src)
         self.assertNotIn('_openReq("x"', src)
 
+    def test_execute_liquidation_without_pending_print_uses_valid_try_catch(self):
+        src = render_test("executeLiquidationBatch", "liquidationReserve", "delayed-order-optionality")
+        self.assertIn("try router.executeLiquidationBatch", src)
+        self.assertNotIn("1.5e8)); {}", src)
+        self.assertIn("try router.executeLiquidationBatch(accounts, _mockPythUpdateData(1.5e8)) {} catch {}", src)
+
+    def test_execute_liquidation_delayed_order_targets_the_pending_account(self):
+        src = render_test("executeLiquidationBatch", "freeSettlement", "delayed-order-optionality")
+        self.assertIn("accounts[0] = ATTACKER", src)
+        self.assertNotIn("accounts[0] = VICTIM", src)
+        self.assertNotIn("try router.executeLiquidationBatch", src)
+        self.assertIn("nextExecuteId", src)
+
+    def test_settle_trader_claim_emits_claim_seed_and_pending_print(self):
+        src = render_test("settleTraderClaim", "freeSettlement", "delayed-order-optionality")
+        self.assertIn("_seedTraderClaim", src)
+        self.assertIn("engine.settleTraderClaim(ATTACKER)", src)
+        self.assertNotIn("try engine.settleTraderClaim", src)
+        self.assertNotIn("_openFilled", src)
+        self.assertIn("claim/free path was a no-op", src)
+
+    def test_hwm_reconcile_emits_second_pass_and_hwm_snapshot(self):
+        src = render_test("reconcile", "highWaterMark", "hwm-recap-accounting")
+        self.assertIn("_seedPendingRecap", src)
+        self.assertIn("_snapshotHwm", src)
+        self.assertIn("seniorHighWaterMark() != snapshotHwm", src)
+        self.assertGreaterEqual(src.count("_settleLpEpochForTest()"), 2)
+
+    def test_execute_open_degraded_closes_the_counterparty(self):
+        src = render_test("executeOpen", "degradedMode", "false-emergency-mode")
+        self.assertIn("_openFilled(VICTIM, _short()", src)
+        self.assertIn("_closeFilled(VICTIM)", src)
+        self.assertIn("_thinPool()", src)
+
     def test_addmargin_emits_free_snapshot_and_price_print(self):
         src = render_test("addMargin", "freeSettlement", "delayed-order-optionality")
         self.assertIn("_snapshotFree", src)
@@ -93,9 +127,9 @@ class G3PocGeneratorTests(unittest.TestCase):
         named, pair_only = blind_items()
         remaining_named = [i for i in NAMED_OPEN_IDS if i not in VERIFIED_IDS]
         self.assertEqual(len(named), len(NAMED_OPEN_IDS))
-        self.assertEqual(len(remaining_named), 12)
+        self.assertEqual(len(remaining_named), 11)
         self.assertEqual(len(pair_only), 25)
-        self.assertEqual(len(VERIFIED_IDS), 31)
+        self.assertEqual(len(VERIFIED_IDS), 32)
         src = GEN.read_text(encoding="utf-8")
         self.assertNotIn("findings/plether-key", src)
 

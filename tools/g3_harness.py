@@ -49,6 +49,7 @@ VERIFIED_IDS: frozenset[str] = frozenset(
         "98035", "97903", "97748", "99933", "97971",
         "97858", "99589", "98039",
         "97603", "97622", "97893", "99602",
+        "99536",
     }
 )
 
@@ -188,8 +189,8 @@ def run_distinguishing(
         "test",
         "--root",
         str(root),
-        "--match-path",
-        "test/apex_g3/*",
+        "--match-contract",
+        "ApexG3",
         "--match-test",
         f"^{test_name}$",
         "-vv",
