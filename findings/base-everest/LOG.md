@@ -13,7 +13,11 @@ Never submit. Never print keys. Gates: **G1 Divergence** · **G2 Hypothesis** ·
 
 Mid-Contest Changelog at SCOPE capture: empty. Public KI-59/60/61 (24 Nov 2026) stay **known issues**.
 
-Money Hunter: `strict` on the contracts clone. Apex report: **0 verified**. Forge/slither not installed; G3 execute=false. Fail-closed coverage because F-TEE maps to NitroValidator (other repo).
+Money Hunter: `strict` on the contracts clone. Apex report: **0 verified**. Fail-closed coverage because F-TEE maps to NitroValidator (other repo).
+
+## 0b. Toolchains (G3 enablement)
+
+See `findings/TOOLCHAINS.md`. Foundry forge 1.10.1 and SP1 cargo-prove `d83ed91` are installed. G3 execute is now possible. Prior G3 was prepare-only and is not evidence.
 
 ## Passes
 
